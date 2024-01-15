@@ -1,3 +1,5 @@
+package MainProgram;
+
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
@@ -18,10 +20,16 @@ public class Project {
     public ProjectStatus status;
     public ProjectType type;
 
+    public Project (String name, ProjectType type, Person customer) {
+        this.name = name;
+        this.type = type;
+        this.customer = customer;
+    }
+
     @Override
     public String toString() {
         StringBuilder builder = new StringBuilder();
-        builder.append(name).append(" | PM: ").append(projectManager.fullName()).append(" | Project size: ").append(totalFee);
+        builder.append(name).append(" | PM: ").append(projectManager.fullName()).append(" | MainProgram.Project size: ").append(totalFee);
         return builder.toString();
     }
 }

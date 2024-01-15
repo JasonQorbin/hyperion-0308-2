@@ -1,4 +1,10 @@
+package MainProgram;
+
 import database.DataSource;
+import database.DatabaseException;
+import database.PersonTable;
+import database.ProjectTable;
+
 
 import java.sql.SQLException;
 import java.util.*;
@@ -71,8 +77,9 @@ class CliHandler {
         return getMenuChoice("Menu choice: ", 0, 2);
     }
 
+
     /**
-     * The method called by selecting 'Add to Project' from the menu. Collects the information from the
+     * The method called by selecting 'Add to MainProgram.Project' from the menu. Collects the information from the
      * user and calls to the database as needed.
      *
      * @return The project that should be the new currently selected book (may be a new or existing project)
@@ -80,49 +87,120 @@ class CliHandler {
      */
     public Project addProject() throws DatabaseException{
         try {
-            Project newProject = getProjectInfoFromUser();//Implement
+            Project newProject = getBasicProjectInfoFromUser();//Implement
             if (newProject.number == -1) {
                 newProject.number = DataSource.getInstance().insertBook(newProject);
             }
             return newProject;
+
         } catch (SQLException ex) {
             throw new DatabaseException("Database error encountered while adding a new book record.", ex);
         }
     }
 
-    /**
-     * Method to collect the information for a new book record from the user.
-     *
-     * After getting the book title, it requests a search of the database for the first 3 characters to first a list of
-     * possible existing records that match the one being added. If something is found the method gives the user the
-     * opportunity to select the existing record instead  of creating a new one.
-     *
-     * @return An existing {@link Project} record or on containing the information of a new record with the project
-     * number set to -1
-     * @throws SQLException If an error occurs while searching for existing records.
-     */
-    private Book getBookInfoFromUser() throws SQLException{
-        Project book = new Project();
+    private Project getBasicProjectInfoFromUser() {
+        Person customer = getCustomer();
+        ProjectType type = chooseProjectType();
 
-        book.title =  getTitleFromUser("Book title: ");
-        ArrayList<Project> searchResults = new ArrayList<>(DataSource.getInstance().searchBooks(SearchCriteria.ByTitle, book.title.substring(0,3)));
-        if (!searchResults.isEmpty()) {
-            System.out.println(
-                """
-                We've found a few existing records that are very similar to the book you are adding.
-                Perhaps consider selecting one of these existing records instead.
-                Select a record below or cancel (enter 0) to continue adding a new book:
-                """);
-            Book selection = printAndPickResult(searchResults);
-            if (selection != null) {
-                return selection;
-            }
+        String projectName = getStringFromUser("Project name [leave blank if this is not known yet]: ",
+                ProjectTable.COL_PROJECT_NAME_SIZE, "Project names are limited to ? characters", true);
+        if (projectName.isBlank()) {
+            projectName = type.toString() + " " + customer.surname;
         }
-        book.author = getAuthorFromUser("Book author: ");
-        book.qty = getQtyFromUser("Starting quantity: ");
-        book.id = -1;
-        return book;
+
+        return new Project(projectName, type, customer);
     }
+
+    private ProjectType chooseProjectType() {
+        System.out.println(
+                """
+                What is the project type:
+                =========================
+           
+                """);
+        StringBuilder menu = new StringBuilder();
+        ArrayList<ProjectType> allTypes = new ArrayList<>(ProjectType.getList());
+        for (int i = 0; i < allTypes.size(); i++) {
+            menu.append(i+1).append(": ").append(allTypes.get(i).toString()).append('\n');
+        }
+        menu.append("What is the project type:");
+        int choice = getMenuChoice(menu.toString(), 1, allTypes.size());
+        return allTypes.get(choice);
+    }
+
+    private Person getCustomer() {
+        String name = getStringFromUser("Customer name: ", PersonTable.COL_FIRST_NAME_SIZE, "People's names are limited to ? characters.", false);
+        ArrayList<Pickable> peopleFound = new ArrayList(DataSource.getInstance().searchPeople());
+        Person answer;
+        if (!peopleFound.isEmpty()) {
+            System.out.println("Here are some similar people already in the system.\n Choose one of the or cancel [enter 0] to continue creating a new persona:\n");
+            answer = (Person) printAndPickResult(peopleFound);
+        } else {
+            System.out.println("No existing matches found.\n");
+            answer = new Person();
+            if (getYesNoFromUser("Is " + name + " a surname? [y/n]")) {
+                answer.surname = name;
+                answer.firstName = getStringFromUser("First name : ", PersonTable.COL_FIRST_NAME_SIZE, "People's names are limited to ? characters.", false);
+            } else {
+                answer.firstName = name;
+                answer.surname = getStringFromUser("Surname : ", PersonTable.COL_FIRST_NAME_SIZE, "People's names are limited to ? characters.", false);
+            }
+
+            answer.email = getStringFromUser("E-mail : ", PersonTable.COL_EMAIL_SIZE, "People's names are limited to ? characters.", false);
+            answer.address = getStringFromUser("E-mail : ", PersonTable.COL_PHYS_ADDR_SIZE, "People's names are limited to ? characters.", false);
+        }
+        System.out.println();
+        return answer;
+    }
+
+    public Project showCurrentProjects(Project currentSelection) throws DatabaseException{
+        ArrayList<Pickable> currentProjects = null;
+        try {
+            currentProjects = new ArrayList<>(DataSource.getInstance().getCurrentProjects());
+        } catch (SQLException ex) {
+            System.out.println("Database error while searching for current projects.");
+        }
+        if (currentProjects == null || currentProjects.isEmpty()) {
+            System.out.println("No active or unscheduled projects on record");
+            return currentSelection;
+        } else {
+            Project newSelection = (Project) printAndPickResult(currentProjects);
+            return newSelection;
+        }
+    }
+
+    public Project showOverdueProjects(Project currentSelection) throws DatabaseException{
+        ArrayList<Pickable> overdueProjects = null;
+        try {
+            overdueProjects = new ArrayList<>(DataSource.getInstance().getOverdueProjects());
+        } catch (SQLException ex) {
+            System.out.println("Database error while searching for overdue projects.");
+        }
+        if (overdueProjects == null || overdueProjects.isEmpty()) {
+            System.out.println("No overdue projects on record.");
+            return currentSelection;
+        } else {
+            Project newSelection = (Project) printAndPickResult(overdueProjects);
+            return newSelection;
+        }
+    }
+
+    public Project showAllProjects(Project currentSelection) throws DatabaseException{
+        ArrayList<Pickable> allProjects = null;
+        try {
+            allProjects = new ArrayList<>(DataSource.getInstance().getOverdueProjects());
+        } catch (SQLException ex) {
+            System.out.println("Database error while searching for all projects.");
+        }
+        if (allProjects == null || allProjects.isEmpty()) {
+            System.out.println("No projects on record.");
+            return currentSelection;
+        } else {
+            Project newSelection = (Project) printAndPickResult(allProjects);
+            return newSelection;
+        }
+    }
+
 
     /**
      * Called from the Main menu when the user requests that the selected book be deleted. Displays a message asking
@@ -162,36 +240,37 @@ class CliHandler {
     }
 
     /**
-     * Allows the user to search through the database records and select one for further action.
-     * Called from the main menu.
-     * Gives the user the option to search by Title or by Author. The users search string is passed o to the appropriate
-     * method to search the database.
+     * Allows the user to search through the database records and select a project for further action.
+     * Gives the user the option to search by Project name, property address and person. The person can be any one of
+     * the actors (customers, project manager etc.)
+     * The users search string is passed to the appropriate method to search the database.
      *
-     * @return A {@link Book} object representing the new selection.
+     * @return A {@link Project} object representing the new selection.
      * @throws DatabaseException If a database error occurs during the search.
      */
-    public Book searchDialog() throws DatabaseException{
+    public Project searchDialog() throws DatabaseException{
         System.out.println("""
             How would you like to search:
 
-            1. By book title
-            2. By author
+            1. By project name
+            2. By address
+            3. By person
             0. Back to Main menu
         """);
         
         //TODO: Repeating code block used to get and validate input. Put in method.
         System.out.println();
-        int input = getMenuChoice("Menu choice: ", 0, 2);
-        ArrayList<Book> searchResults;
+        int input = getMenuChoice("Menu choice: ", 0, 3);
+        ArrayList<Project> searchResults;
         System.out.println();
 
         try {
             if (input == 0) { //Operation aborted. No new selection.
                 return null;
             } else if (input == 1) {
-                searchResults = new ArrayList<Book>(searchByTitleDialog());
+                searchResults = new ArrayList<Project>(searchByTitleDialog());
             } else if (input == 2) {
-                searchResults = new ArrayList<Book>(searchByAuthorDialog());
+                searchResults = new ArrayList<Project>(searchByAuthorDialog());
             } else {
                 throw new AssertionError("Unhandled menu choice" + input + " encountered in search dialog");
             }
@@ -251,7 +330,7 @@ class CliHandler {
      * @param searchResults A List of {@link Project} objects to select from.
      * @return The selected {@link Project}.
      */
-    private Project printAndPickResult(List<Project> searchResults) {
+    private Pickable printAndPickResult(List<Pickable> searchResults) {
         System.out.println(" -- Search results -- ");
         System.out.println();
         for (int index = 0; index < searchResults.size(); ++index) {
@@ -261,7 +340,7 @@ class CliHandler {
             }
             result.append(index + 1);
             result.append(" - ");
-            result.append(searchResults.get(index).toString());
+            result.append(searchResults.get(index).getOneLineString());
             System.out.println(result);
         }
         System.out.println();
@@ -275,47 +354,13 @@ class CliHandler {
     }
 
     /**
-     * Allows methods to signal whether a search should be done by Book title or author so that the database query
-     * can be constructed correctly.
+     * Allows methods to signal how a search should be done by in the database: Project name, property address or person
+     * (which could be any one of the actors associated with a project).
      */
     public static enum SearchCriteria {
-        ByTitle,
-        ByAuthor
-    }
-
-    //TODO: redo these searches
-
-    /**
-     * Displays a prompt to the user asking them to enter a book title to search for
-     *
-     * @return A list of search results (Books)
-     * @throws SQLException If the underlying database call fails.
-     */
-    private List<Book> searchByTitleDialog() throws SQLException{
-        return searchByCriteria("Book title to search for (Leave blank to show all records) : ", SearchCriteria.ByTitle);
-    }
-    /**
-     *
-     * Displays a prompt to the user asking them to enter a book author to search for
-     *
-     * @return A list of search results (Books)
-     * @throws SQLException If the underlying database call fails.
-     */
-    private List<Book> searchByAuthorDialog() throws SQLException {
-        return searchByCriteria("Book author to search for (Leave blank to show all records) : ", SearchCriteria.ByAuthor);
-    }
-
-    /**
-     * Helper function that reads the search term from the user as input and passes it to the datasource.
-     *
-     * @return A list of search results (Books)
-     * @throws SQLException If the underlying database call fails.
-     */
-    private List<Book> searchByCriteria(String prompt, SearchCriteria criteria) throws SQLException {
-        System.out.print(prompt);
-        String searchString = consoleReader.nextLine();
-
-        return DataSource.getInstance().searchBooks(criteria, searchString);
+        ByProjectName,
+        ByAddress,
+        ByPerson
     }
 
 
@@ -358,6 +403,26 @@ class CliHandler {
         }
         System.out.println();
         return changed;
+    }
+
+    private boolean getYesNoFromUser(String prompt) {
+        while (true) {
+            System.out.print(prompt);
+            String answer = consoleReader.next();
+            System.out.println();
+
+            if (answer.length() != 1) {
+                continue;
+            }
+
+            if (answer.equalsIgnoreCase("Y")) {
+                return true;
+            }
+
+            if (answer.equalsIgnoreCase("N")) {
+                return false;
+            }
+        }
     }
 
     /**
@@ -438,46 +503,37 @@ class CliHandler {
         }
     }
 
+
+
+
+
+
     /**
-     * Helper method for asking the user to input a book title with a given prompt.
-     * The method does input validation by checking the length of the input against the database column parameters.
+     * Helper method to get a String from the user with just a basic length validation check
      *
-     * @param prompt The prompt that should be shown to the user to ask for the book title.
-     * @param allowBlankAnswer {@code true} if blank titles should be allowed by the validation check.
-     * @return The user input.
+     * @param prompt The text to display prompting the user for input.
+     * @return The String from the user.
      */
-    private String getTitleFromUser(String prompt, boolean allowBlankAnswer) {
-        String title = "";
-        boolean valid = false;
+    public String getStringFromUser(String prompt, int maxLength, String lengthErrorMsg, boolean acceptBlank) {
+        System.out.print(prompt);
+        boolean haveValidInput = false;
+        while (!haveValidInput) {
+            String answer = consoleReader.nextLine();
+            System.out.println();
 
-        while (!valid) {
-            System.out.print(prompt);
-            title = consoleReader.nextLine();
-            if (title.isBlank() && allowBlankAnswer){
-                return title;
+            if (answer.isBlank() && !acceptBlank) {
+                System.out.println("\nBlank input is not allowed for this field\n");
+                continue;
             }
-            if (title.isBlank()){
-                System.out.println("Titles can't be blank.");
-            } else if (title.length() > DataSource.COLUMN_TITLE_SIZE) {
-                System.out.println("Maximum length is " + DataSource.COLUMN_TITLE_SIZE + " characters");
-            } else {
-                valid = true;
+
+            if (maxLength > 0 && answer.length() > maxLength) {
+                System.out.println("\n" + lengthErrorMsg.replace("?", Integer.toString(maxLength)) + "\n");
+                continue;
             }
+            haveValidInput = true;
         }
-
-        return title;
+        return answer;
     }
-
-    /**
-     * Helper method for asking the user to input a book title with a given prompt.
-     * Defaults to not allowing blank input.
-     * @param prompt The prompt that should be shown to the user to ask for the book title.
-     * @return The user input.
-     */
-    private String getTitleFromUser(String prompt) {
-        return getTitleFromUser(prompt, false);
-    }
-
 
     /**
      * Helper method to get a String from the user without any validation checks
@@ -485,12 +541,11 @@ class CliHandler {
      * @param prompt The text to display prompting the user for input.
      * @return The String from the user.
      */
-    public String getStringFromUser(String prompt) {
-        System.out.print(prompt);
-        String answer = consoleReader.nextLine();
-        System.out.println();
-        return answer;
+    public String getStringFromUser(String prompt, boolean acceptBlank) {
+        return getStringFromUser(prompt, 0, null, acceptBlank);
     }
+
+
 
     /**
      * Closes the connection to the console. Should only be called once at the end of the program when no more input

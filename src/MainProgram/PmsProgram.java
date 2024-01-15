@@ -1,4 +1,7 @@
+package MainProgram;
+
 import database.DataSource;
+import database.DatabaseCredentials;
 
 import java.sql.SQLException;
 
@@ -31,7 +34,7 @@ public class PmsProgram {
         //The program is modelled as a state machine. Each state determines the current behaviour of the program.
         //The program loops continuously until the EXIT state is reached.
         ProgramState programState = ProgramState.MAIN_MENU;
-        Book currentSelection = null;
+        Project currentSelection = null;
 
         consoleHandler.printTitle();
         while (programState != ProgramState.EXIT) {
@@ -39,6 +42,23 @@ public class PmsProgram {
                 case MAIN_MENU:
                     int menuChoice = consoleHandler.printMainMenu(currentSelection);
                     programState = newStateFromMainMenu(menuChoice);
+                    break;
+                case NEW_PROJECT:
+                    currentSelection = consoleHandler.addProject();
+                    programState = ProgramState.MAIN_MENU;
+                    break;
+                case VIEW_CURRENT:
+                    currentSelection = consoleHandler.showCurrentProjects(currentSelection);
+                    programState = ProgramState.MAIN_MENU;
+                    break;
+                case VIEW_LATE:
+                    currentSelection = consoleHandler.showOverdueProjects(currentSelection);
+                    programState = ProgramState.MAIN_MENU;
+                    break;
+                case SEARCH_ALL:
+                    currentSelection = consoleHandler.searchDialog();
+                    programState = ProgramState.MAIN_MENU;
+                    break;
             }
         }
         //Exiting program. Cleanup any open resources.

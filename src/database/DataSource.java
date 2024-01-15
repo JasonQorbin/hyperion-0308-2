@@ -1,10 +1,12 @@
 package database;
 
+import MainProgram.*;
+
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
 
-class DataSource {
+public class DataSource {
     private DatabaseCredentials credentials;
     private Connection connection;
 
@@ -25,7 +27,7 @@ class DataSource {
     /**
      * Returns the static instance of the singleton database.DataSource, instantiating one if it doesn't exist yet using the
      * set of credentials provided.
-     * @param newCredentials The DatabaseCredentials object to apply.
+     * @param newCredentials The database.DatabaseCredentials object to apply.
      * @return A reference to the database.DataSource object
      * @throws SQLException If a connection could not be established. Ensure that the connection parameters are correct
      * and the database is reachable and running.
@@ -123,19 +125,153 @@ class DataSource {
         connection.setCatalog(credentials.getDatabase());
 
         checkAndInitialiseTables();
+    }
+
+    private void checkAndInitialiseTables() throws SQLException{
+        //The order of the tables in this method is important.
+        // The Projects table must be last because it depends on the others.
+
+        ArrayList<DatabaseTable> tablesToMake = new ArrayList<>();
+        tablesToMake.add(new StatusTable());
+        tablesToMake.add(new PersonTable());
+        tablesToMake.add(new ProjectTypeTable());
+        tablesToMake.add(new ProjectTable());
+
+        for (DatabaseTable table : tablesToMake) {
+            if (!tableExists(table.TABLE_NAME)) {
+                executeUpdate(table.getCreationQuery());
+                executeBatchInsert(table.getInitialDataQueries());
             }
+        }
+
+    }
+
+    /**
+     * Checks to see if a table of the given name exists in the current database. This method assumes the database
+     * already exists. An SQL Exception will be thrown if the database doesn't exist yet.
+     *
+     * @return {@code true} if the database table exists.
+     * @throws SQLException If an error occurs with the database connection or the database doesn't exist yet.
+     */
+    private boolean tableExists(String tableName) throws SQLException{
+        StringBuilder queryBuilder = new StringBuilder();
+        queryBuilder.append("SELECT * FROM information_schema.tables WHERE table_schema = '")
+                .append(credentials.getDatabase()).append("' AND table_name = '")
+                .append(tableName).append("';");
+        Statement statement = connection.createStatement();
+        ResultSet result = statement.executeQuery(queryBuilder.toString());
+        boolean success = result.next();
+        statement.close();
+        return success;
+    }
+
+    private int executeUpdate(String sql) throws SQLException{
+        Statement statement = connection.createStatement();
+        int updateCount = statement.executeUpdate(sql);
+        statement.close();
+        return updateCount;
+    }
+
+    private void executeBatchInsert(List<String> insertQueries) throws SQLException{
+        Statement statement = connection.createStatement();
+        for (String insertQuery : insertQueries) {
+            statement.addBatch(insertQuery);
+        }
+        statement.executeBatch();
+        statement.close();
+    }
+
+    private List<Pickable> getProjects(String whereClause) throws DatabaseException{
+        ArrayList<Pickable> answer = new ArrayList<>();
+        try (Statement statement = connection.createStatement()) {
+            StringBuilder query = new StringBuilder();
+            query.append("SELECT * FROM ").append(ProjectTable.TABLE_NAME);
+            if (whereClause != null) {
+                query.append(' ').append(whereClause);
+            }
+            Statement statement = connection.createStatement();
+            ResultSet results = statement.executeQuery(query.toString());
+            answer.addAll(getListOfProjectsFromResultSet(results));
+            statement.close();
+        } catch (SQLException ex) {
+            throw new DatabaseException("Database error while searching for projects", ex);
+        }
+        return answer;
+    }
+
+    private List<Pickable> getAllProjects() throws DatabaseException{
+        return getProjects(null);
+    }
+
+    public List<Pickable>getCurrentProjects() throws DatabaseException{
+        StringBuilder whereClause = new StringBuilder();
+        whereClause.append("WHERE ").append(ProjectTable.COL_DEADLINE).append(" IS NULL OR ")
+                .append(ProjectTable.COL_DEADLINE).append(" > CURDATE();");
+        return getProjects(whereClause.toString());
+    }
+
+    public List<Pickable>getOverdueProjects() throws DatabaseException{
+        StringBuilder whereClause = new StringBuilder();
+        whereClause.append("WHERE ").append(ProjectTable.COL_DEADLINE).append(" < CURDATE();");
+        return getProjects(whereClause.toString());
+    }
+
+    private List<Project> getListOfProjectsFromResultSet(ResultSet resultSet) throws SQLException {
+        ArrayList<Project> answer = new ArrayList<>();
+        while (resultSet.next()) {
+            Project newProject = getProjectFromResultSet(resultSet);
+            answer.add(newProject);
+        }
+        return answer;
+    }
+
+    private Project getProjectFromResultSet(ResultSet resultSet) throws SQLException{
+        Project answer = new Project(
+                resultSet.getString(ProjectTable.COL_PROJECT_NAME),
+                getProjectTypeByID(resultSet.getLong(ProjectTable.COL_PROJECT_NAME)),
+                getPersonByID(resultSet.getLong(ProjectTable.COL_CUSTOMER))
+        );
+
+        answer.number = resultSet.getLong(ProjectTable.COL_NUMBER);
+        answer.erfNum = resultSet.getInt(ProjectTable.COL_ERF);
+        answer.address = resultSet.getString(ProjectTable.COL_PHYS_ADDR);
+        answer.totalFee = resultSet.getBigDecimal(ProjectTable.COL_TOTAL_FEE);
+        answer.totalPaid = resultSet.getBigDecimal(ProjectTable.COL_TOTAL_PAID);
+        answer.engineer = getPersonByID(resultSet.getLong(ProjectTable.COL_ENGINEER));
+        answer.projectManager = getPersonByID(resultSet.getLong(ProjectTable.COL_PROJ_MANAGER));
+        answer.architect = getPersonByID(resultSet.getLong(ProjectTable.COL_ARCHITECT));
+        answer.deadline = resultSet.getDate(ProjectTable.COL_DEADLINE).toLocalDate();
+        answer.status = getProjectStatusByID(resultSet.getLong(ProjectTable.COL_STATUS));
 
 
-    //Person table paramaters
-    //======================
-    private static final String BOOK_TABLE_NAME = "books";
+        return answer;
+    }
 
-    public static final String COLUMN_ID = "id";
-    public static final String COLUMN_TITLE = "Title";
-    public static final int COLUMN_TITLE_SIZE = 80;
-    public static final String COLUMN_AUTHOR = "Author";
-    public static final int COLUMN_AUTHOR_SIZE = 80;
-    public static final String COLUMN_QTY = "Qty";
+    private ProjectType getProjectTypeByID(long ID) {
+        return ProjectType.get((int)ID);
+    }
+
+    private ProjectStatus getProjectStatusByID(long ID) {
+        return ProjectStatus.get((int)ID);
+    }
+
+    private Person getPersonByID(long ID) throws SQLException{
+        if (ID == 0) return null;
+
+        StringBuilder query = new StringBuilder();
+        query.append("SELECT * FROM ").append(PersonTable.TABLE_NAME).append(" WHERE ")
+                .append(PersonTable.COL_ID).append(" = ").append(ID).append(';');
+        Statement statement = connection.createStatement();
+        ResultSet result = statement.executeQuery(query.toString());
+        Person answer;
+        if (result.next()) {
+            answer = getPersonFromResultSet(result);
+        } else {
+            answer = null;
+        }
+        statement.close();
+        return answer;
+    }
 
     /**
      * Executes a query  to cleanly (re)create the table in the Books table in the database.
@@ -230,25 +366,6 @@ class DataSource {
     }
 
     /**
-     * Checks to see if the Books table exists. This method assumes the database already exists.
-     * A SQL Exception will be thrown if the database doesn't exist yet.
-     *
-     * @return {@code true} if the database table exists.
-     * @throws SQLException If an error occurs with the database connection or the database doesn't exist yet.
-     */
-    public boolean bookTableExists() throws SQLException {
-        StringBuilder queryBuilder = new StringBuilder();
-        queryBuilder.append("SELECT * FROM information_schema.tables WHERE table_schema = '")
-                .append(credentials.getDatabase()).append("' AND table_name = '")
-                .append(BOOK_TABLE_NAME).append("';");
-        Statement statement = connection.createStatement();
-        ResultSet result = statement.executeQuery(queryBuilder.toString());
-        boolean success = result.next();
-        statement.close();
-        return success;
-    }
-
-    /**
      * Deletes a record in the books table of the given ID number.
      * 
      * @param idToDelete The ID number of the record to delete.
@@ -278,100 +395,6 @@ class DataSource {
         return deleteBook(bookToDelete.id);
     }
 
-    //Initial Data
-    private final String STARTING_TITLES [] = {
-        "A Tale of Two Cities",
-        "Harry Potter and the Philosophers Stone",
-        "The Lion, the With & the Wardrobe",
-        "The Lord of the Rings",
-        "Alice in Wonderland",
-        "Queen of Shadows",
-        "Iron Flame",
-        "Throne of Glass",
-        "Heir of Fire",
-        "The Lion: Son of the Forest",
-        "Courage and Honour",
-        "The Queen of Nothing",
-        "The Wicked King",
-        "Everless",
-        "Evermore",
-        "The Cruel Prince",
-        "Empire of Storms",
-        "Harry Potter and the Prisoner of Azkaban",
-        "Harry Potter and the Chamber of Secrets"
-    };
-
-    private final String STARTING_AUTHORS [] = {
-        "Charles Dickens",
-        "J.K. Rowling",
-        "C.S. Lewis",
-        "J.R.R Tolkien",
-        "Lewis Carrol",
-        "Sarah J Maas",
-        "Rebecca Yarros",
-        "Sarah J Maas",
-        "Sarah J Maas",
-        "Mike Brooks",
-        "Graham McNeill",
-        "Holly Black",
-        "Holly Black",
-        "Sara Holland",
-        "Sara Holland",
-        "Holly Black",
-        "Sarah J Maas",
-        "J.K. Rowling",
-        "J.K. Rowling"
-    };
-
-    private final int STARTING_QTY [] = {
-        30,
-        40,
-        25,
-        37,
-        12,
-        154,
-        122,
-        87,
-        164,
-        11,
-        11,
-        39,
-        29,
-        56,
-        57,
-        30,
-        734,
-        41,
-        61
-    };
-
-    /**
-     * Inserts the initial data into the books table.
-     *
-     * The insertion query is built here again so that a PreparedStatement can be used in a batch execution.
-     *
-     * @throws SQLException If an error occurs with the database connection.
-     */
-    public void insertInitialData() throws SQLException {
-        StringBuilder query = new StringBuilder();
-        query.append("INSERT INTO ").append(BOOK_TABLE_NAME).append(" (")
-                .append(COLUMN_TITLE).append(", ")
-                .append(COLUMN_AUTHOR).append(", ")
-                .append(COLUMN_QTY)
-                .append(") VALUES ( ?, ?, ? );");
-
-        PreparedStatement statement = connection.prepareStatement(query.toString());
-        for (int index = 0; index < STARTING_TITLES.length; ++index) {
-            statement.setString(1,STARTING_TITLES[index]);
-            statement.setString(2,STARTING_AUTHORS[index]);
-            statement.setInt(3,STARTING_QTY[index]);
-            statement.addBatch();
-            statement.clearParameters();
-        }
-        statement.executeBatch();
-        statement.close();
-    }
-
     /**
      * Helper function for reading query results. Parses the current row of the given ResultSet object and creates a
      * {@link Book} object for that. The method expects the ID, Title, Author and Qty columns to be present in the
@@ -390,6 +413,78 @@ class DataSource {
         answer.qty = resultSet.getInt(COLUMN_QTY);
         return answer;
     }
+
+    public List<Person> searchPeople(String searchName) throws SQLException{
+        StringBuilder queryPrefix = new StringBuilder();
+        queryPrefix.append("SELECT ");
+        for (int i = 0; i <PersonTable.ALL_COLUMN_NAMES.length; i++) {
+            queryPrefix.append(PersonTable.ALL_COLUMN_NAMES[i]);
+            if (i < PersonTable.ALL_COLUMN_NAMES.length -1) {
+                queryPrefix.append(", ");
+            }
+        }
+        queryPrefix.append(" FROM ").append(PersonTable.TABLE_NAME).append(" WHERE ");
+
+        StringBuilder firstNameExact = new StringBuilder(queryPrefix);
+        StringBuilder firstNameFuzzy = new StringBuilder(queryPrefix);
+        StringBuilder surnameExact = new StringBuilder(queryPrefix);
+        StringBuilder surnameFuzzy = new StringBuilder(queryPrefix);
+
+        firstNameExact.append(PersonTable.COL_FIRST_NAME).append(" = ?;");
+        surnameExact.append(PersonTable.COL_SURNAME).append(" = ?;");
+        firstNameFuzzy.append(PersonTable.COL_FIRST_NAME).append(" LIKE ? ESCAPE '!';");
+        surnameFuzzy.append(PersonTable.COL_SURNAME).append(" LIKE ? ESCAPE '!';");
+
+        PreparedStatement firstNameExactStatement = connection.prepareStatement(firstNameExact.toString());
+        PreparedStatement surnameExactStatement = connection.prepareStatement(surnameExact.toString());
+        PreparedStatement firstNameFuzzyStatement = connection.prepareStatement(firstNameFuzzy.toString());
+        PreparedStatement surnameFuzzyStatement = connection.prepareStatement(surnameFuzzy.toString());
+
+        firstNameExactStatement.setString(1, searchName);
+        surnameExactStatement.setString(1, searchName);
+        firstNameFuzzyStatement.setString(1, "%" + likeSanitise(searchName) + "%");
+        surnameFuzzyStatement.setString(1, "%" + likeSanitise(searchName) + "%");
+
+        ResultSet firstNameExactResult = firstNameExactStatement.executeQuery();
+        ResultSet surnameExactResult = surnameExactStatement.executeQuery();
+        ResultSet firstNameFuzzyResult = firstNameFuzzyStatement.executeQuery();
+        ResultSet surnameFuzzyResult = surnameFuzzyStatement.executeQuery();
+
+        ArrayList<Person> answer = new ArrayList<>();
+
+        answer.addAll(getListOfPersonsFromResultSet(firstNameExactResult));
+        answer.addAll(getListOfPersonsFromResultSet(surnameExactResult));
+        answer.addAll(getListOfPersonsFromResultSet(firstNameFuzzyResult));
+        answer.addAll(getListOfPersonsFromResultSet(surnameFuzzyResult));
+
+        firstNameExactResult.close();
+        surnameExactResult.close();
+        firstNameFuzzyResult.close();
+        surnameFuzzyResult.close();
+
+        return answer;
+    }
+
+    private List<Person> getListOfPersonsFromResultSet(ResultSet resultSet) throws SQLException {
+        ArrayList<Person> answer = new ArrayList<>();
+        while (resultSet.next()) {
+            Person newPerson = getPersonFromResultSet(resultSet);
+            answer.add(newPerson);
+        }
+        return answer;
+    }
+
+    private Person getPersonFromResultSet(ResultSet resultSet) throws SQLException{
+        Person answer = new Person();
+        answer.id = resultSet.getLong(PersonTable.COL_ID);
+        answer.firstName = resultSet.getString(PersonTable.COL_FIRST_NAME);
+        answer.surname = resultSet.getString(PersonTable.COL_SURNAME);
+        answer.address = resultSet.getString(PersonTable.COL_PHYS_ADDR);
+        answer.email = resultSet.getString(PersonTable.COL_EMAIL);
+
+        return answer;
+    }
+
 
     /**
      * Searches the database for records that matches the given search term and returns the results as a List of Book

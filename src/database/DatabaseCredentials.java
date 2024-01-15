@@ -1,3 +1,5 @@
+package database;
+
 /**
  * This class is just a container to pass the database details around.
  */

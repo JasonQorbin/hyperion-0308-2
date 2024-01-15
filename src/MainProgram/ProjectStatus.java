@@ -1,3 +1,5 @@
+package MainProgram;
+
 public enum ProjectStatus {
     CAPTURED(1),
     LOGGED(2),
@@ -7,7 +9,11 @@ public enum ProjectStatus {
     CONSTRUCTION(6),
     FINAL(7);
 
-    private int id;
+    public long id() {
+        return id;
+    }
+
+    private long id;
 
     private ProjectStatus(int id) {
         this.id = id;
@@ -26,4 +32,16 @@ public enum ProjectStatus {
         };
     }
 
+    public static ProjectStatus get(int id) {
+        return switch(id) {
+            case 1 -> CAPTURED;
+            case 2 -> LOGGED;
+            case 3 -> CONCEPT;
+            case 4 -> PREFEAS;
+            case 5 -> BANKABLE;
+            case 6 -> CONSTRUCTION;
+            case 7 -> FINAL;
+            default -> null;
+        };
+    }
 }
