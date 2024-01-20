@@ -3,7 +3,7 @@ package database;
 import java.util.ArrayList;
 import java.util.List;
 
-public class ProjectTable extends DatabaseTable{
+public class ProjectTable {
 
     static public final String TABLE_NAME = "Projects";
     //Columns
@@ -44,15 +44,16 @@ public class ProjectTable extends DatabaseTable{
 
     public static String getCreationQuery() {
         final String padding = "    ";
-        final String foreignKeyReferenceString =  ") FOREIGN KEY REFERENCES " + PersonTable.TABLE_NAME + " (" + PersonTable.COL_ID + ")";
+        final String foreignKeyReferenceString =  ") REFERENCES " + PersonTable.TABLE_NAME + " (" + PersonTable.COL_ID + ")";
         final String foreignKeyHandlingString = padding + padding + padding + "ON UPDATE CASCADE ON DELETE SET NULL,";
+        final String foreignKeyHandlingCustomerString = padding + padding + padding + "ON UPDATE CASCADE ON DELETE RESTRICT,";
         StringBuilder query = new StringBuilder();
         query.append("CREATE TABLE ").append(TABLE_NAME).append('\n')
                 .append("(\n")
-                .append(padding).append(COL_NUMBER).append(" INT UNSIGNED AUTO_INCREMENT COMMENT 'MainProgram.Project Number',\n")
+                .append(padding).append(COL_NUMBER).append(" INT UNSIGNED AUTO_INCREMENT COMMENT 'Project Number',\n")
                 .append(padding).append(COL_PROJECT_NAME).append(" VARCHAR(").append(COL_PROJECT_NAME_SIZE).append(") NOT NULL,\n")
-                .append(padding).append(COL_PHYS_ADDR).append(" VARCHAR(").append(COL_PHYS_ADDR_SIZE).append(") NOT NULL,\n")
-                .append(padding).append(COL_ERF).append(" INT UNSIGNED NOT NULL,\n")
+                .append(padding).append(COL_PHYS_ADDR).append(" VARCHAR(").append(COL_PHYS_ADDR_SIZE).append(") NULL,\n")
+                .append(padding).append(COL_ERF).append(" INT UNSIGNED NULL,\n")
                 .append(padding).append(COL_TOTAL_FEE).append(" DECIMAL(20, 2) UNSIGNED DEFAULT 0 NOT NULL,\n")
                 .append(padding).append(COL_TOTAL_PAID).append(" DECIMAL(20, 2) UNSIGNED DEFAULT 0 NOT NULL,\n")
                 .append(padding).append(COL_DEADLINE).append(" DATE NULL,\n")
@@ -60,7 +61,7 @@ public class ProjectTable extends DatabaseTable{
                 .append(padding).append(COL_PROJ_MANAGER).append(" INT UNSIGNED NULL,\n")
                 .append(padding).append(COL_CUSTOMER).append(" INT UNSIGNED NOT NULL,\n")
                 .append(padding).append(COL_ARCHITECT).append(" INT UNSIGNED NULL,\n")
-                .append(padding).append(COL_STATUS).append(" INT UNSIGNED DEFAULT 0 NOT NULL,\n")
+                .append(padding).append(COL_STATUS).append(" INT UNSIGNED DEFAULT 1 NOT NULL,\n")
                 .append(padding).append(COL_TYPE).append(" INT UNSIGNED NOT NULL,\n")
                 .append(padding).append("CONSTRAINT ").append(TABLE_NAME).append("_pk\n")
                 .append(padding).append(padding).append("PRIMARY KEY (Num),\n")
@@ -71,7 +72,7 @@ public class ProjectTable extends DatabaseTable{
                 .append(padding).append("CONSTRAINT ").append(TABLE_NAME).append("_Cust_Person_fk\n")
                 .append(padding).append(padding).append("FOREIGN KEY (").append(COL_CUSTOMER)
                 .append(foreignKeyReferenceString).append('\n')
-                .append(foreignKeyHandlingString).append('\n')
+                .append(foreignKeyHandlingCustomerString).append('\n')
                 .append(padding).append("CONSTRAINT ").append(TABLE_NAME).append("_Engineer_Person_fk\n")
                 .append(padding).append(padding).append("FOREIGN KEY (").append(COL_ENGINEER)
                 .append(foreignKeyReferenceString).append('\n')
@@ -80,7 +81,9 @@ public class ProjectTable extends DatabaseTable{
                 .append(padding).append(padding).append("FOREIGN KEY (").append(COL_PROJ_MANAGER)
                 .append(foreignKeyReferenceString).append('\n')
                 .append(foreignKeyHandlingString).append('\n')
+                .deleteCharAt(query.lastIndexOf(","))
                 .append(");");
+
         return query.toString();
     }
 

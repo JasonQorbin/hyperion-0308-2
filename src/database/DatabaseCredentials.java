@@ -51,4 +51,17 @@ public class DatabaseCredentials {
     public String getDatabase() {
         return database;
     }
+
+    @Override
+    public String toString() {
+        StringBuilder builder = new StringBuilder();
+        builder.append("Vendor: ").append(vendor).append('\n');
+        builder.append("Protocol: ").append(protocol).append('\n');
+        builder.append("Host: ").append(host).append('\n');
+        builder.append("Port: ").append(port).append('\n');
+        builder.append("User: ").append(user).append('\n');
+        builder.append("Password: ").append(password).append('\n');
+        builder.append("Database: ").append(database).append('\n');
+        return builder.toString();
+    }
 }

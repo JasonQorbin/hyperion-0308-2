@@ -6,13 +6,9 @@ import java.util.List;
 
 public abstract class DatabaseTable {
 
-    protected String TABLE_NAME;
+    public String TABLE_NAME;
     protected String[] ALL_COLUMN_NAMES;
-    public static String getCreationQuery() {
-        return null;
-    }
+    public abstract String getCreationQuery();
 
-    public static List<String> getInitialDataQueries(){
-        return null;
-    }
+    public abstract List<String> getInitialDataQueries();
 }

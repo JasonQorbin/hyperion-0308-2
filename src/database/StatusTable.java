@@ -3,9 +3,9 @@ package database;
 import java.util.ArrayList;
 import java.util.List;
 
-public class StatusTable extends DatabaseTable{
+public class StatusTable {
     
-    static public final String TABLE_NAME = "MainProgram.ProjectStatus";
+    static public final String TABLE_NAME = "ProjectStatus";
     
     static public final String COL_ID = "ID";
     static public final String COL_NAME = "Name";
@@ -55,7 +55,7 @@ public class StatusTable extends DatabaseTable{
         for (int i = 1; i <= numOfEntries; i++) {
             answer.add(new StringBuilder(queryBase)
                 .append(i).append(", ")
-                .append('\'').append(INITIAL_NAMES[i-1]).append(");").toString());
+                .append('\'').append(INITIAL_NAMES[i-1]).append("');").toString());
 
         }
         return answer;

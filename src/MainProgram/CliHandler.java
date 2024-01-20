@@ -6,7 +6,11 @@ import database.PersonTable;
 import database.ProjectTable;
 
 
-import java.sql.SQLException;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.*;
 
 class CliHandler {
@@ -38,22 +42,22 @@ class CliHandler {
             //Nothing selected. Call the version of the menu without the extra options.
             return printMainMenu();
         }
-        System.out.println( //TODO: Update
+        System.out.println(
             """
             Main  Menu
             ==========
             
-            1. Add a new book
-            2. Search/select books
-            3. Update selected book
-            4. Delete selected book
+            1. Add a new project
+            2. View & Select from all ongoing projects
+            3. View & Select from all overdue projects
+            4. View & Select from all projects
+            5. Progress/Edit/Delete the selected project
             0. Exit
             """
         );
-        System.out.println("Selected project: "
-            + selectedProject.title + " by " + selectedProject.author + " (" + selectedProject.qty + ")\n");
+        System.out.println("Selected project: " + selectedProject.getOneLineString());
         boolean haveValidInput = false;
-        return getMenuChoice("Menu choice: ", 0, 4);
+        return getMenuChoice("Menu choice: ", 0, 5);
     }
 
     /**
@@ -63,43 +67,40 @@ class CliHandler {
      * @return The user's selection
      */
     public int printMainMenu() {
-        System.out.println( //TODO: Update
+        System.out.println(
             """
             Main Menu
             =========
             
-            1. Add a new book
-            2. Search/select books
+            1. Add a new project
+            2. View & Select from all ongoing projects
+            3. View & Select from all overdue projects
+            4. View & Select from all projects
             0. Exit
             """
         );
         System.out.println();
-        return getMenuChoice("Menu choice: ", 0, 2);
+        return getMenuChoice("Menu choice: ", 0, 4);
     }
 
 
     /**
-     * The method called by selecting 'Add to MainProgram.Project' from the menu. Collects the information from the
+     * The method called by selecting 'Add to Project' from the menu. Collects the information from the
      * user and calls to the database as needed.
      *
      * @return The project that should be the new currently selected book (may be a new or existing project)
      * @throws DatabaseException If an error occurs when calling the database.
      */
     public Project addProject() throws DatabaseException{
-        try {
-            Project newProject = getBasicProjectInfoFromUser();//Implement
-            if (newProject.number == -1) {
-                newProject.number = DataSource.getInstance().insertBook(newProject);
-            }
-            return newProject;
+        System.out.println("Please search for a customer to assign the new project (The customer will be created if they don't exist yet):");
+        Project newProject = getBasicProjectInfoFromUser();
+        newProject.number = DataSource.getInstance().insertProject(newProject);
 
-        } catch (SQLException ex) {
-            throw new DatabaseException("Database error encountered while adding a new book record.", ex);
-        }
+        return newProject;
     }
 
-    private Project getBasicProjectInfoFromUser() {
-        Person customer = getCustomer();
+    private Project getBasicProjectInfoFromUser() throws DatabaseException {
+        Person customer = findOrCreatePerson();
         ProjectType type = chooseProjectType();
 
         String projectName = getStringFromUser("Project name [leave blank if this is not known yet]: ",
@@ -128,9 +129,10 @@ class CliHandler {
         return allTypes.get(choice);
     }
 
-    private Person getCustomer() {
-        String name = getStringFromUser("Customer name: ", PersonTable.COL_FIRST_NAME_SIZE, "People's names are limited to ? characters.", false);
-        ArrayList<Pickable> peopleFound = new ArrayList(DataSource.getInstance().searchPeople());
+    private Person findOrCreatePerson() throws DatabaseException {
+        String name = getStringFromUser("Name to search: ", PersonTable.COL_FIRST_NAME_SIZE,
+                "People's names are limited to ? characters.", false);
+        ArrayList<Pickable> peopleFound = new ArrayList(DataSource.getInstance().searchPeople(name));
         Person answer;
         if (!peopleFound.isEmpty()) {
             System.out.println("Here are some similar people already in the system.\n Choose one of the or cancel [enter 0] to continue creating a new persona:\n");
@@ -138,105 +140,58 @@ class CliHandler {
         } else {
             System.out.println("No existing matches found.\n");
             answer = new Person();
-            if (getYesNoFromUser("Is " + name + " a surname? [y/n]")) {
+            if (getYesNoFromUser("Is " + name + " a surname? [y/n] ")) {
                 answer.surname = name;
-                answer.firstName = getStringFromUser("First name : ", PersonTable.COL_FIRST_NAME_SIZE, "People's names are limited to ? characters.", false);
+                answer.firstName = getStringFromUser("First name : ", PersonTable.COL_FIRST_NAME_SIZE,
+                        "People's names are limited to ? characters.", false);
             } else {
                 answer.firstName = name;
-                answer.surname = getStringFromUser("Surname : ", PersonTable.COL_FIRST_NAME_SIZE, "People's names are limited to ? characters.", false);
+                answer.surname = getStringFromUser("Surname : ", PersonTable.COL_FIRST_NAME_SIZE,
+                        "People's names are limited to ? characters.", false);
             }
 
-            answer.email = getStringFromUser("E-mail : ", PersonTable.COL_EMAIL_SIZE, "People's names are limited to ? characters.", false);
-            answer.address = getStringFromUser("E-mail : ", PersonTable.COL_PHYS_ADDR_SIZE, "People's names are limited to ? characters.", false);
+            answer.email = getStringFromUser("E-mail : ", PersonTable.COL_EMAIL_SIZE,
+                    "People's names are limited to ? characters.", false);
+            answer.address = getStringFromUser("Physical Address : ", PersonTable.COL_PHYS_ADDR_SIZE,
+                    "People's names are limited to ? characters.", false);
+
+            answer.id = DataSource.getInstance().insertPerson(answer);
         }
         System.out.println();
         return answer;
     }
 
     public Project showCurrentProjects(Project currentSelection) throws DatabaseException{
-        ArrayList<Pickable> currentProjects = null;
-        try {
-            currentProjects = new ArrayList<>(DataSource.getInstance().getCurrentProjects());
-        } catch (SQLException ex) {
-            System.out.println("Database error while searching for current projects.");
-        }
-        if (currentProjects == null || currentProjects.isEmpty()) {
-            System.out.println("No active or unscheduled projects on record");
+        ArrayList<Pickable> currentProjects = new ArrayList<>(DataSource.getInstance().getCurrentProjects());
+
+        if ( currentProjects.isEmpty() ) {
+            System.out.println("---  No active or unscheduled projects on record  ---\n");
             return currentSelection;
         } else {
-            Project newSelection = (Project) printAndPickResult(currentProjects);
-            return newSelection;
+            return (Project) printAndPickResult(currentProjects);
         }
     }
 
     public Project showOverdueProjects(Project currentSelection) throws DatabaseException{
-        ArrayList<Pickable> overdueProjects = null;
-        try {
-            overdueProjects = new ArrayList<>(DataSource.getInstance().getOverdueProjects());
-        } catch (SQLException ex) {
-            System.out.println("Database error while searching for overdue projects.");
-        }
-        if (overdueProjects == null || overdueProjects.isEmpty()) {
-            System.out.println("No overdue projects on record.");
+        ArrayList<Pickable> overdueProjects = new ArrayList<>(DataSource.getInstance().getOverdueProjects());
+
+        if ( overdueProjects.isEmpty() ) {
+            System.out.println("---  No overdue projects on record.  ---\n");
             return currentSelection;
         } else {
-            Project newSelection = (Project) printAndPickResult(overdueProjects);
-            return newSelection;
+            return (Project) printAndPickResult(overdueProjects);
         }
     }
 
     public Project showAllProjects(Project currentSelection) throws DatabaseException{
-        ArrayList<Pickable> allProjects = null;
-        try {
-            allProjects = new ArrayList<>(DataSource.getInstance().getOverdueProjects());
-        } catch (SQLException ex) {
-            System.out.println("Database error while searching for all projects.");
-        }
-        if (allProjects == null || allProjects.isEmpty()) {
-            System.out.println("No projects on record.");
+        ArrayList<Pickable> allProjects = new ArrayList<>(DataSource.getInstance().getOverdueProjects());
+
+        if ( allProjects.isEmpty() ) {
+            System.out.println("---  No projects on record.  ---\n");
             return currentSelection;
         } else {
-            Project newSelection = (Project) printAndPickResult(allProjects);
-            return newSelection;
+            return (Project) printAndPickResult(allProjects);
         }
-    }
-
-
-    /**
-     * Called from the Main menu when the user requests that the selected book be deleted. Displays a message asking
-     * the user to confirm the action and then calls the appropriate database method to do the deletion.
-     * @param bookToDelete A {@link Book} object representing the record to be deleted.
-     * @return {@code true} if the database is successfully modified.
-     * @throws DatabaseException If a database error occurs.
-     */
-    public boolean deleteBook(Book bookToDelete) throws DatabaseException{
-        boolean userConfirmed = confirmDeletion(bookToDelete);
-        if (userConfirmed) {
-            try {
-                DataSource.getInstance().deleteBook(bookToDelete);
-                return true;
-            } catch (SQLException ex) {
-                throw new DatabaseException("Database error encountered while deleting book record.", ex);
-            }
-        } else {
-            return false;
-        }
-    }
-
-    /**
-     * Displays a message to the user asking them to confirm that they want to delete the selected record.
-     *
-     * @param book A {@link Book} object representing the record to be deleted.
-     * @return {@code true} if the user confirmed. {@code false} if the user wants to cancel the operation.
-     */
-    private boolean confirmDeletion(Book book) {
-        String input = " ";
-        while (!input.equalsIgnoreCase("y") && !input.equalsIgnoreCase("n")) {
-            System.out.print("Are you sure you want to delete the selected record? [y/n] ");
-            input = consoleReader.nextLine();
-            System.out.println();
-        }
-        return input.equalsIgnoreCase("y");
     }
 
     /**
@@ -260,31 +215,47 @@ class CliHandler {
         
         //TODO: Repeating code block used to get and validate input. Put in method.
         System.out.println();
-        int input = getMenuChoice("Menu choice: ", 0, 3);
-        ArrayList<Project> searchResults;
-        System.out.println();
+        final int input = getMenuChoice("Menu choice: ", 0, 3);
 
-        try {
-            if (input == 0) { //Operation aborted. No new selection.
+        ArrayList<Pickable> searchResults;
+        System.out.println();
+        String searchTerm;
+
+        switch (input) {
+            case 0:
                 return null;
-            } else if (input == 1) {
-                searchResults = new ArrayList<Project>(searchByTitleDialog());
-            } else if (input == 2) {
-                searchResults = new ArrayList<Project>(searchByAuthorDialog());
-            } else {
+            case 1:
+                final int maxProjectLength = ProjectTable.COL_PROJECT_NAME_SIZE;
+                searchTerm = getStringFromUser("Project name: ",
+                        maxProjectLength,
+                        "Project names can be at most" + maxProjectLength + " characters long."
+                        , false);
+                searchResults = new ArrayList<>(DataSource.getInstance().getProjectsByName(searchTerm));
+                break;
+            case 2:
+                final int maxAddressLength = ProjectTable.COL_PHYS_ADDR_SIZE;
+                searchTerm = getStringFromUser("Project Address: ",
+                        maxAddressLength,
+                        "Project addresses can be at most" + maxAddressLength + " characters long."
+                        , false);
+                searchResults = new ArrayList<>(DataSource.getInstance().getProjectsByAddress(searchTerm));
+                break;
+            case 3:
+                final Person personToSearch = findOrCreatePerson();
+                searchResults = new ArrayList<>(DataSource.getInstance().getProjectsByPerson(personToSearch));
+                break;
+            default:
                 throw new AssertionError("Unhandled menu choice" + input + " encountered in search dialog");
-            }
-        } catch (SQLException sqlEx) {
-            throw new DatabaseException("Database error encountered while performing search." , sqlEx);
         }
 
         if (searchResults.isEmpty()) {
             System.out.println(" -- No search results -- ");
             return null;
         } else {
-            return printAndPickResult(searchResults);
+            return (Project) printAndPickResult(searchResults);
         }
     }
+
 
     /**
      * Helper method for getting user input for a menu and validating it.
@@ -298,14 +269,12 @@ class CliHandler {
         boolean haveValidInput = false;
         int input = minChoice -1;
         while (!haveValidInput) {
+            input = minChoice -1;
+            System.out.print(prompt);
+            String stringInput = consoleReader.nextLine();
             try {
-                System.out.print(prompt);
-                input = consoleReader.nextInt();
-                consoleReader.nextLine();
-            } catch (InputMismatchException exc) {
-                //The input received doesn't appear to be an integer
-                continue;
-            } catch (NoSuchElementException exc) {
+                input = Integer.parseInt(stringInput);
+            } catch (NumberFormatException exc) {
                 //No input received
                 continue;
             }
@@ -354,61 +323,331 @@ class CliHandler {
     }
 
     /**
-     * Allows methods to signal how a search should be done by in the database: Project name, property address or person
-     * (which could be any one of the actors associated with a project).
-     */
-    public static enum SearchCriteria {
-        ByProjectName,
-        ByAddress,
-        ByPerson
-    }
-
-
-    /**
-     * Displays the update menu which asks the user which parameter they would like to update.
-     * Called from the main menu.
+     * Displays the update menu. This menu is used to change/enrich each project record but also to delete them or
+     * advance the status to the next stage.
      *
-     * @param selectedBook The currently selected book which will be modified.
-     * @return {@code true} if the database is actually modified by this operation.
+     * @param selectedProject The currently selected project which will be modified.
      * @throws DatabaseException If an error occurs in the underlying database call.
      */
-    public boolean updateMenu(Project selectedProject) throws DatabaseException{ //TODO: Update
-        System.out.println(""" 
-                What would you like to change in the selected item?
-                1. Book title
-                2. Author
-                3. Quantity
-                """);
+    public Project updateMenu(Project selectedProject) throws DatabaseException{
+        int choice = -1;
+        while (choice != 0) {
+            System.out.println("Selected project: " + selectedProject.getOneLineString());
+            System.out.println(""" 
+                    What would you like to change in the selected item?
+                    1. Update project record
+                    2. Advance project stage
+                    3. Delete project
+                    0. Return to Main Menu
+                    """);
 
-        int choice = getMenuChoice("Make a selection [0 to cancel]: ", 0, 3);
-        System.out.println();
+            choice = getMenuChoice("Make a selection [0 to cancel]: ", 0, 3);
+            System.out.println();
 
-        boolean changed = false;
-        try {
             switch (choice) {
-                case 0:
-                    return false;
                 case 1:
-                    changed = updateTitle(selectedBook);
+                    updateProjectDetailMenu(selectedProject);
                     break;
                 case 2:
-                    changed = updateAuthor(selectedBook);
+
                     break;
                 case 3:
-                    changed = updateQty(selectedBook);
+                    if (deleteProject(selectedProject)) {
+                        selectedProject = null;
+                        choice = 0;
+                    }
+                    else {
+                        choice = -1;
+                    }
                     break;
             }
-        } catch (SQLException sqlEx) {
-            throw new DatabaseException("Database error encountered while updating existing record", sqlEx);
         }
         System.out.println();
-        return changed;
+        return selectedProject;
+    }
+
+    private Project updateProjectDetailMenu(Project projectToChange) throws DatabaseException{
+        StringBuilder menuText = new StringBuilder();
+        HashMap<String, Object> changes = new HashMap<>();
+        String input = "";
+        boolean shouldContinue = true;
+        while (shouldContinue) {
+            System.out.println("Current project record: " +projectToChange.getOneLineString());
+            menuText.setLength(0);
+            menuText.append(
+                    """
+                            Update options:
+                            1. Project name
+                            2. Address
+                            3. ERF number
+                            4. Total Fee
+                            5. Total Paid to-date
+                            6. Project deadline 
+                            """);
+            menuText.append(projectToChange.customer == null ? "7. Assign customer\n" : "7. Reassign customer\n");
+            menuText.append(projectToChange.engineer == null ? "8. Assign engineer\n" : "8. Reassign engineer\n");
+            menuText.append(projectToChange.projectManager == null ? "9. Assign project manager\n" : "9. Reassign project manager\n");
+            menuText.append(projectToChange.architect == null ? "10. Assign architect\n" : "10. Reassign architect\n");
+            menuText.append("11. Change project type\n\n");
+            if (changes.size() > 0) {
+                menuText.append("'S'= Save changes and exit\n");
+            }
+            menuText.append("'Q'= Quit without saving\n\n");
+            menuText.append("Please make a selection: ");
+
+            System.out.print(menuText);
+
+            input = consoleReader.nextLine();
+            input = input.trim();
+
+            int numberChoice;
+            try {
+                numberChoice = Integer.parseInt(input);
+            } catch (NumberFormatException ex) {
+                numberChoice = -1;
+            }
+
+            if (input.equalsIgnoreCase("S") || input.equalsIgnoreCase("Q")) {
+                shouldContinue = false;
+            } else if (numberChoice < 1 || numberChoice > 11 ) {
+                System.out.println("Invalid input. Please try again.");
+            } else {
+                String newStringValue;
+                int newIntValue = 0;
+                BigDecimal newBigDecimalValue;
+                Person newPerson;
+
+
+                switch (numberChoice) {
+                    case 1: //Change Project Name
+                        newStringValue = getNewStringValueForUpdateMenu(
+                                "New project name",
+                                projectToChange.name,
+                                ProjectTable.COL_PROJECT_NAME_SIZE,
+                                "Project names are limited to ? characters"
+
+                        );
+                        if (!newStringValue.isBlank()) {
+                            changes.put(ProjectTable.COL_PROJECT_NAME, newStringValue);
+                        } else {
+                            changes.remove(ProjectTable.COL_PROJECT_NAME);
+                        }
+                        break;
+                    case 2: //Change address
+                        newStringValue = getNewStringValueForUpdateMenu(
+                                "New project address",
+                                projectToChange.address,
+                                ProjectTable.COL_PHYS_ADDR_SIZE,
+                                "Project addresses are limited to ? characters"
+
+                        );
+                        if (!newStringValue.isBlank()) {
+                            changes.put(ProjectTable.COL_PHYS_ADDR, newStringValue);
+                        } else {
+                            changes.remove(ProjectTable.COL_PHYS_ADDR);
+                        }
+                        break;
+                    case 3: //Change ERF
+                        newIntValue = getNewIntValueForUpdateMenu("New ERF number", projectToChange.erfNum, false);
+                        if (newIntValue != projectToChange.erfNum) {
+                            changes.put(ProjectTable.COL_ERF, newIntValue);
+                        } else {
+                            changes.remove(ProjectTable.COL_ERF);
+                        }
+                        break;
+                    case 4: //Change total fee
+                        newBigDecimalValue = getNewDecimalValueForUpdateMenu("New Total Fee", projectToChange.totalFee, true);
+                        if (newBigDecimalValue != null) {
+                            changes.put(ProjectTable.COL_TOTAL_FEE, newBigDecimalValue);
+                        } else {
+                            changes.remove(ProjectTable.COL_TOTAL_FEE);
+                        }
+                        break;
+                    case 5: //Change total paid to-date
+                        newBigDecimalValue = getNewDecimalValueForUpdateMenu("New amount paid to-date", projectToChange.totalPaid, true);
+                        if (newBigDecimalValue != null) {
+                            changes.put(ProjectTable.COL_TOTAL_PAID, newBigDecimalValue);
+                        } else {
+                            changes.remove(ProjectTable.COL_TOTAL_PAID);
+                        }
+                        break;
+                    case 6: //Change deadline
+                        final DateTimeFormatter formatter  = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+                        StringBuilder prompt = new StringBuilder();
+                        prompt.append("Enter a new deadline in the format YYYY-MM-DD");
+                        if (projectToChange.deadline != null) {
+                            prompt.append(" [leave blank to keep the current value of ")
+                                    .append(projectToChange.deadline.format(formatter)).append(']');
+                        }
+                        prompt.append(": ");
+                        LocalDate newDate = null;
+                        while (newDate == null) {
+                            newStringValue = getStringFromUser(prompt.toString(), false);
+                            try {
+                                newDate = LocalDate.parse(newStringValue, formatter);
+                            } catch ( DateTimeParseException ex ) {
+                                System.out.println("Check your date format and try again");
+                            }
+                        }
+
+                        if (!newDate.equals(projectToChange.deadline)) {
+                            changes.put(ProjectTable.COL_DEADLINE, newDate);
+                        } else {
+                            changes.remove(ProjectTable.COL_DEADLINE);
+                        }
+                        break;
+                    case 7: //Change customer
+                        newPerson = getNewAssignee(projectToChange.customer, "customer");
+                        if (projectToChange.customer.id != newPerson.id) {
+                            changes.put(ProjectTable.COL_CUSTOMER, newPerson.id);
+                        } else {
+                            changes.remove(ProjectTable.COL_CUSTOMER);
+                        }
+                        break;
+                    case 8: //Change engineer
+                        newPerson = getNewAssignee(projectToChange.engineer, "engineer");
+                        if (projectToChange.engineer.id != newPerson.id) {
+                            changes.put(ProjectTable.COL_ENGINEER, newPerson.id);
+                        } else {
+                            changes.remove(ProjectTable.COL_ENGINEER);
+                        }
+                        break;
+                    case 9: //Change PM
+                        newPerson = getNewAssignee(projectToChange.projectManager, "project manager");
+                        if (projectToChange.projectManager.id != newPerson.id) {
+                            changes.put(ProjectTable.COL_PROJ_MANAGER, newPerson.id);
+                        } else {
+                            changes.remove(ProjectTable.COL_PROJ_MANAGER);
+                        }
+                        break;
+                    case 10: //Change architect
+                        newPerson = getNewAssignee(projectToChange.architect, "architect");
+                        if (projectToChange.architect.id != newPerson.id) {
+                            changes.put(ProjectTable.COL_ARCHITECT, newPerson.id);
+                        } else {
+                            changes.remove(ProjectTable.COL_ARCHITECT);
+                        }
+                        break;
+                    case  11: //Change project type
+                        System.out.println("The current project type is " + projectToChange.type.toString());
+                        ProjectType newType = chooseProjectType();
+                        if (newType != projectToChange.type) {
+                            changes.put(ProjectTable.COL_TYPE, newType.id());
+                        }
+                        break;
+                }
+            }
+        }
+
+        if (input.equalsIgnoreCase("S")) {
+            //Process all the changes and update the selected object
+            DataSource dataSource = DataSource.getInstance();
+            if (dataSource.updateProject(projectToChange, changes)) {
+                return dataSource.getProjectByNumber(projectToChange.number);
+            }
+        }
+        return projectToChange;
+    }
+
+    private String getNewStringValueForUpdateMenu(String promptPrefix, String oldValue, int maxLength, String lengthErrorMsg){
+        StringBuilder prompt = new StringBuilder();
+        prompt.append(promptPrefix);
+        if (oldValue != null && !oldValue.isBlank()) {
+            prompt.append(" [leave blank to keep the current value (").append(oldValue).append(")]");
+        }
+        prompt.append(':');
+        return getStringFromUser(prompt.toString(), maxLength, lengthErrorMsg, true);
+    }
+
+    private int getNewIntValueForUpdateMenu(String promptPrefix, int oldValue, boolean zeroAllowed){
+        StringBuilder prompt = new StringBuilder();
+        prompt.append(promptPrefix);
+        if (!zeroAllowed) {
+            prompt.append(" (Required Value) ");
+        }
+        if (oldValue != 0 || zeroAllowed) {
+            prompt.append(" [leave blank to keep the current value (").append(oldValue).append(")]");
+        }
+        prompt.append(':');
+        String newValue;
+        Integer answer = null;
+        while (answer == null) {
+            newValue = getStringFromUser(prompt.toString(), true);
+            if ( newValue.isBlank() && (oldValue != 0 || zeroAllowed) ) {
+                return oldValue;
+            } else {
+                try {
+                    answer = Integer.parseInt(newValue);
+                } catch (NumberFormatException ex) {
+                    System.out.println("The input given does not appear to be a number.");
+                }
+            }
+            if ( answer != null && answer == 0 && !zeroAllowed ) {
+                answer = null;
+            }
+        }
+        return answer;
+    }
+
+    private BigDecimal getNewDecimalValueForUpdateMenu(String promptPrefix, BigDecimal oldValue, boolean zeroAllowed){
+        final BigDecimal ZERO = new BigDecimal(0);
+        StringBuilder prompt = new StringBuilder();
+        prompt.append(promptPrefix);
+        boolean oldValueIsNotZero = !oldValue.equals(ZERO);
+        if (!zeroAllowed) {
+            prompt.append(" (Required Value) ");
+        }
+        if ( oldValueIsNotZero || zeroAllowed) {
+            prompt.append(" [leave blank to keep the current value (").append(oldValue).append(")]");
+        }
+        prompt.append(':');
+        String newValue;
+        BigDecimal answer = null;
+        while (answer == null) {
+            newValue = getStringFromUser(prompt.toString(), true);
+            if ( newValue.isBlank() && (oldValueIsNotZero || zeroAllowed) ) {
+                return oldValue;
+            } else {
+                try {
+                    answer = new BigDecimal(newValue);
+                    answer = answer.setScale(2, RoundingMode.HALF_UP);
+                } catch (NumberFormatException ex) {
+                    System.out.println("The input given does not appear to be a number.");
+                }
+            }
+            if (answer != null && answer.equals(ZERO) && !zeroAllowed) {
+                answer = null;
+            }
+        }
+        return answer;
+    }
+
+    private Person getNewAssignee(Person oldPerson, String role) throws DatabaseException {
+        if (oldPerson != null) {
+            System.out.println("Current assigned " + role + " is: " + oldPerson.getOneLineString());
+        }
+        return findOrCreatePerson();
+    }
+
+    private boolean deleteProject(Project projectToDelete) throws DatabaseException{
+
+        System.out.println("Selected project: " + projectToDelete.getOneLineString());
+        boolean confirmedDeletion = getYesNoFromUser("Are you sure you want to delete the selected project? [y/n]: ");
+
+        boolean deleted = false;
+        if (confirmedDeletion) {
+            deleted = DataSource.getInstance().deleteProject(projectToDelete);
+        } else {
+            return false;
+        }
+
+        return deleted;
     }
 
     private boolean getYesNoFromUser(String prompt) {
         while (true) {
             System.out.print(prompt);
-            String answer = consoleReader.next();
+            String answer = consoleReader.nextLine();
             System.out.println();
 
             if (answer.length() != 1) {
@@ -425,88 +664,6 @@ class CliHandler {
         }
     }
 
-    /**
-     * Prompts the user for a new book title and then calls the appropriate database method to make the
-     * change if necessary.
-     *
-     * @param selectedBook The currently selected book that will be modified.
-     * @return {@code true} if the database is actually modified by this operation.
-     * @throws SQLException If an error occurs in the underlying database call.
-     */
-    private boolean updateTitle(Book selectedBook) throws SQLException{
-        StringBuilder prompt = new StringBuilder();
-        prompt.append("Current title: ").append(selectedBook.title).append("\nEnter new title [leave blank to cancel]: ");
-        String newTitle = getTitleFromUser(prompt.toString(), true);
-
-        if (!newTitle.equals(selectedBook.title)) {
-            if (DataSource.getInstance().updateTitle(selectedBook, newTitle)) {
-                selectedBook.title = newTitle;
-                return true;
-            } else {
-                return false;
-            }
-        } else {
-            return false;
-        }
-    }
-
-    /**
-     * Prompts the user for a new book author and then calls the appropriate database method to make the
-     * change if necessary.
-     *
-     * @param selectedBook The currently selected book that will be modified.
-     * @return {@code true} if the database is actually modified by this operation.
-     * @throws SQLException If an error occurs in the underlying database call.
-     */
-    private boolean updateAuthor(Book selectedBook) throws SQLException{
-        StringBuilder prompt = new StringBuilder();
-        prompt.append("Current author: ").append(selectedBook.author).append("\nEnter new author [leave blank to cancel]: ");
-        String newAuthor = getAuthorFromUser(prompt.toString(),  true);
-
-        if (!newAuthor.equals(selectedBook.author)) {
-            if (DataSource.getInstance().updateAuthor(selectedBook, newAuthor)) {
-                selectedBook.author = newAuthor;
-                return true;
-            } else {
-                return false;
-            }
-        } else {
-            return false;
-        }
-    }
-
-    /**
-     * Prompts the user for a new book quantity and then calls the appropriate database method to make the
-     * change if necessary.
-     *
-     * @param selectedBook The currently selected book that will be modified.
-     * @return {@code true} if the database is actually modified by this operation.
-     * @throws SQLException If an error occurs in the underlying database call.
-     */
-    private boolean updateQty(Book selectedBook) throws SQLException{
-        StringBuilder prompt = new StringBuilder();
-        prompt.append("Current quantity: ").append(selectedBook.qty).append("\nEnter new qty [leave blank to cancel]: ");
-        int newQty = getQtyFromUser(prompt.toString(), true);
-
-        if (newQty == -1){
-            return false;
-        }
-        if (newQty != selectedBook.qty) {
-            if (DataSource.getInstance().updateQty(selectedBook, newQty)) {
-                selectedBook.qty = newQty;
-                return true;
-            } else {
-                return false;
-            }
-        } else {
-            return false;
-        }
-    }
-
-
-
-
-
 
     /**
      * Helper method to get a String from the user with just a basic length validation check
@@ -515,10 +672,11 @@ class CliHandler {
      * @return The String from the user.
      */
     public String getStringFromUser(String prompt, int maxLength, String lengthErrorMsg, boolean acceptBlank) {
-        System.out.print(prompt);
         boolean haveValidInput = false;
+        String answer = "";
         while (!haveValidInput) {
-            String answer = consoleReader.nextLine();
+            System.out.print(prompt);
+            answer = consoleReader.nextLine();
             System.out.println();
 
             if (answer.isBlank() && !acceptBlank) {
@@ -544,7 +702,6 @@ class CliHandler {
     public String getStringFromUser(String prompt, boolean acceptBlank) {
         return getStringFromUser(prompt, 0, null, acceptBlank);
     }
-
 
 
     /**

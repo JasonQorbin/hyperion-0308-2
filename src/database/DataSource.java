@@ -2,9 +2,10 @@ package database;
 
 import MainProgram.*;
 
+import java.math.BigDecimal;
 import java.sql.*;
-import java.util.ArrayList;
-import java.util.List;
+import java.sql.Date;
+import java.util.*;
 
 public class DataSource {
     private DatabaseCredentials credentials;
@@ -20,7 +21,7 @@ public class DataSource {
      * @throws SQLException If a connection could not be established. Ensure that the connection parameters are correct
      * and the database is reachable and running.
      */
-    public static DataSource getInstance() throws SQLException{
+    public static DataSource getInstance() {
         return instance;
     }
 
@@ -29,10 +30,8 @@ public class DataSource {
      * set of credentials provided.
      * @param newCredentials The database.DatabaseCredentials object to apply.
      * @return A reference to the database.DataSource object
-     * @throws SQLException If a connection could not be established. Ensure that the connection parameters are correct
-     * and the database is reachable and running.
      */
-    public static DataSource getInstance(DatabaseCredentials newCredentials) throws SQLException{
+    public static DataSource getInstance(DatabaseCredentials newCredentials){
         if (instance == null) {
             instance = new DataSource(newCredentials);
         }
@@ -41,10 +40,8 @@ public class DataSource {
 
     /**
      * Constructor. Establishes the connection to the database.
-     * @throws SQLException If a connection could not be established. Ensure that the connection parameters are correct
-     * and the database is reachable and running.
      */
-    private DataSource(DatabaseCredentials credentials) throws SQLException {
+    private DataSource(DatabaseCredentials credentials)  {
         this.credentials = credentials;
         int retryCounter = 0;
         boolean success = false;
@@ -75,9 +72,8 @@ public class DataSource {
                 }
             }
         }
-        initialiseDatabase();
     }
-    //------
+    //---End of Singleton pattern---
 
     /**
      * Checks if the correct database schema exists by querying the information schema.
@@ -85,14 +81,16 @@ public class DataSource {
      * @return {@code true} if the database exists.
      * @throws SQLException If an error occurs with the database connection.
      */
-    private boolean databaseExists() throws SQLException {
-        Statement statement = connection.createStatement();
-        StringBuilder query = new StringBuilder();
-        query.append("SELECT schema_name FROM information_schema.schemata WHERE schema_name = '")
-            .append(credentials.getDatabase()).append("';");
-        ResultSet result = statement.executeQuery(query.toString());
-        boolean answer = result.next();
-        statement.close();
+    private boolean databaseExists() throws DatabaseException {
+        String query = "SELECT schema_name FROM information_schema.schemata WHERE schema_name = ?;";
+        boolean answer = false;
+        try(PreparedStatement statement = connection.prepareStatement(query)) {
+            statement.setString(1, credentials.getDatabase());
+            ResultSet result = statement.executeQuery();
+            answer = result.next();
+        } catch (SQLException ex) {
+            throw new DatabaseException("Database error while checking the database schema", ex);
+        }
         return answer;
     }
 
@@ -101,13 +99,13 @@ public class DataSource {
      *
      * @throws SQLException If an error occurs with the database connection.
      */
-    private void createDatabase() throws SQLException {
-        Statement statement = connection.createStatement();
-        StringBuilder query = new StringBuilder();
-        query.append("CREATE DATABASE ")
-            .append(credentials.getDatabase()).append(";");
-        statement.executeUpdate(query.toString());
-        statement.close();
+    private void createDatabase() throws DatabaseException {
+        String query = "CREATE DATABASE " + credentials.getDatabase();
+        try (Statement statement = connection.createStatement()) {
+            statement.executeUpdate(query);
+        } catch (SQLException ex) {
+            throw new DatabaseException("Database error while creating database schema", ex);
+        }
     }
 
     /**
@@ -116,34 +114,56 @@ public class DataSource {
      *
      * @throws SQLException If an error occurs with the database connection.
      */
-    public void initialiseDatabase() throws SQLException {
+    public void initialiseDatabase() throws DatabaseException {
         if (!databaseExists()) {
             createDatabase();   
         }
 
         //Set the default database.
-        connection.setCatalog(credentials.getDatabase());
+        try(Statement statement = connection.createStatement()) {
+           statement.executeUpdate("USE " + credentials.getDatabase());
+        } catch (SQLException ex) {
+            throw new DatabaseException("Database error while setting the default schema", ex);
+        }
+
 
         checkAndInitialiseTables();
     }
 
-    private void checkAndInitialiseTables() throws SQLException{
+    //TODO: Remove
+    public void printCurrentDatabase() throws DatabaseException {
+        String query = "SELECT DATABASE();";
+        try (Statement statement = connection.createStatement()) {
+            ResultSet result = statement.executeQuery(query);
+            result.next();
+            System.out.println("Current Database: " + result.getString(1));
+        } catch (SQLException ex) {
+            throw new DatabaseException("Error while checking current database", ex);
+        }
+    }
+
+    private void checkAndInitialiseTables() throws DatabaseException{
         //The order of the tables in this method is important.
         // The Projects table must be last because it depends on the others.
 
-        ArrayList<DatabaseTable> tablesToMake = new ArrayList<>();
-        tablesToMake.add(new StatusTable());
-        tablesToMake.add(new PersonTable());
-        tablesToMake.add(new ProjectTypeTable());
-        tablesToMake.add(new ProjectTable());
-
-        for (DatabaseTable table : tablesToMake) {
-            if (!tableExists(table.TABLE_NAME)) {
-                executeUpdate(table.getCreationQuery());
-                executeBatchInsert(table.getInitialDataQueries());
-            }
+        if (!tableExists(StatusTable.TABLE_NAME)){
+            executeUpdate(StatusTable.getCreationQuery());
+            executeBatchInsert(StatusTable.getInitialDataQueries());
         }
 
+        if (!tableExists(PersonTable.TABLE_NAME)){
+            executeUpdate(PersonTable.getCreationQuery());
+            executeBatchInsert(PersonTable.getInitialDataQueries());
+        }
+
+        if (!tableExists(ProjectTypeTable.TABLE_NAME)){
+            executeUpdate(ProjectTypeTable.getCreationQuery());
+            executeBatchInsert(ProjectTypeTable.getInitialDataQueries());
+        }
+
+        if (!tableExists(ProjectTable.TABLE_NAME)){
+            executeUpdate(ProjectTable.getCreationQuery());
+        }
     }
 
     /**
@@ -153,69 +173,166 @@ public class DataSource {
      * @return {@code true} if the database table exists.
      * @throws SQLException If an error occurs with the database connection or the database doesn't exist yet.
      */
-    private boolean tableExists(String tableName) throws SQLException{
+    private boolean tableExists(String tableName) throws DatabaseException{
         StringBuilder queryBuilder = new StringBuilder();
         queryBuilder.append("SELECT * FROM information_schema.tables WHERE table_schema = '")
                 .append(credentials.getDatabase()).append("' AND table_name = '")
                 .append(tableName).append("';");
-        Statement statement = connection.createStatement();
-        ResultSet result = statement.executeQuery(queryBuilder.toString());
-        boolean success = result.next();
-        statement.close();
+        boolean success = false;
+        try (Statement statement = connection.createStatement()) {
+            ResultSet result = statement.executeQuery(queryBuilder.toString());
+            success = result.next();
+        } catch (SQLException ex) {
+            throw new DatabaseException("Database error while checking if the required tables exist", ex);
+        }
         return success;
     }
 
-    private int executeUpdate(String sql) throws SQLException{
-        Statement statement = connection.createStatement();
-        int updateCount = statement.executeUpdate(sql);
-        statement.close();
+    private int executeUpdate(String sql) throws DatabaseException{
+        int updateCount = 0;
+        try(Statement statement = connection.createStatement()) {
+            updateCount = statement.executeUpdate(sql);
+        } catch (SQLException ex) {
+            throw new DatabaseException("Database error while executing update", ex);
+        }
         return updateCount;
     }
 
-    private void executeBatchInsert(List<String> insertQueries) throws SQLException{
-        Statement statement = connection.createStatement();
-        for (String insertQuery : insertQueries) {
-            statement.addBatch(insertQuery);
+    private void executeBatchInsert(List<String> insertQueries) throws DatabaseException{
+        try(Statement statement = connection.createStatement()) {
+            for (String insertQuery : insertQueries) {
+                statement.addBatch(insertQuery);
+            }
+            statement.executeBatch();
+        } catch (SQLException ex) {
+            throw new DatabaseException("Database error while doing batch insert", ex);
         }
-        statement.executeBatch();
-        statement.close();
     }
 
-    private List<Pickable> getProjects(String whereClause) throws DatabaseException{
-        ArrayList<Pickable> answer = new ArrayList<>();
-        try (Statement statement = connection.createStatement()) {
-            StringBuilder query = new StringBuilder();
-            query.append("SELECT * FROM ").append(ProjectTable.TABLE_NAME);
-            if (whereClause != null) {
-                query.append(' ').append(whereClause);
-            }
-            Statement statement = connection.createStatement();
-            ResultSet results = statement.executeQuery(query.toString());
+    private List<Project> getProjectsByStringSearch(String whereClause, String stringParameter) throws DatabaseException{
+        ArrayList<Project> answer = new ArrayList<>();
+        StringBuilder query = new StringBuilder();
+        query.append("SELECT * FROM ").append(ProjectTable.TABLE_NAME);
+        if (whereClause != null) {
+            query.append(' ').append(whereClause);
+        }
+        try (PreparedStatement statement = connection.prepareStatement(query.toString())) {
+            statement.setString(1, stringParameter);
+            ResultSet results = statement.executeQuery();
             answer.addAll(getListOfProjectsFromResultSet(results));
-            statement.close();
         } catch (SQLException ex) {
             throw new DatabaseException("Database error while searching for projects", ex);
         }
         return answer;
     }
 
-    private List<Pickable> getAllProjects() throws DatabaseException{
-        return getProjects(null);
+    private List<Project> getProjectsBySearch(String whereClause) throws DatabaseException {
+        ArrayList<Project> answer = new ArrayList<>();
+        StringBuilder query = new StringBuilder();
+        query.append("SELECT * FROM ").append(ProjectTable.TABLE_NAME);
+        if (whereClause != null) {
+            query.append(' ').append(whereClause);
+        }
+        try(Statement statement = connection.createStatement()) {
+            ResultSet results = statement.executeQuery(query.toString());
+            answer.addAll(getListOfProjectsFromResultSet(results));
+        } catch (SQLException ex) {
+            throw new DatabaseException("Database error while searching for projects", ex);
+        }
+
+        return answer;
     }
 
-    public List<Pickable>getCurrentProjects() throws DatabaseException{
+    public Project getProjectByNumber(long number) throws DatabaseException {
+        StringBuilder whereClause  = new StringBuilder();
+        whereClause.append("WHERE ").append(ProjectTable.COL_NUMBER).append(" = ").append(number);
+        ArrayList<Project> output = new ArrayList<>(getProjectsBySearch(whereClause.toString()));
+        if (output.size() > 1) {
+            throw new DatabaseException("Could not find Project number " + number + ". Query returned multiple values.");
+        } else if (output.isEmpty()) {
+            throw new DatabaseException("Could not find Project number " + number + ".");
+        } else {
+            return output.get(0);
+        }
+    }
+
+    private List<Project> getAllProjects() throws DatabaseException{
+        return getProjectsBySearch(null);
+    }
+
+    public List<Project>getCurrentProjects() throws DatabaseException{
         StringBuilder whereClause = new StringBuilder();
         whereClause.append("WHERE ").append(ProjectTable.COL_DEADLINE).append(" IS NULL OR ")
                 .append(ProjectTable.COL_DEADLINE).append(" > CURDATE();");
-        return getProjects(whereClause.toString());
+        return getProjectsBySearch(whereClause.toString());
     }
 
-    public List<Pickable>getOverdueProjects() throws DatabaseException{
+    public List<Project>getOverdueProjects() throws DatabaseException{
         StringBuilder whereClause = new StringBuilder();
-        whereClause.append("WHERE ").append(ProjectTable.COL_DEADLINE).append(" < CURDATE();");
-        return getProjects(whereClause.toString());
+        whereClause.append("WHERE ").append(ProjectTable.COL_DEADLINE).append(" < CURDATE()");
+        return getProjectsBySearch(whereClause.toString());
     }
 
+    public List<Project> getProjectsByName(String searchTerm) throws DatabaseException {
+        return getProjectsByString(searchTerm, ProjectTable.COL_PROJECT_NAME);
+    }
+
+    public List<Project> getProjectsByAddress (String searchTerm) throws DatabaseException {
+        return getProjectsByString(searchTerm, ProjectTable.COL_PHYS_ADDR);
+    }
+
+    private List<Project> getProjectsByString (String searchTerm, String column) throws DatabaseException  {
+        StringBuilder whereClause = new StringBuilder();
+        ArrayList<Project> answer;
+        //Do exact search first so that we show it at the top of the search results if the user typed a specific searchTerm
+        whereClause.append("WHERE ").append(column).append(" = ?");
+        answer = new ArrayList<>(getProjectsByStringSearch(whereClause.toString(), searchTerm));
+
+        //Then do a fuzzy search for a word in the middle of the database value
+        whereClause.setLength(0);
+        whereClause.append("WHERE ").append(column).append(" LIKE ? ESCAPE '!' ");
+        answer.addAll(getProjectsByStringSearch(whereClause.toString(), "%" + likeSanitize(searchTerm) + "%"));
+        return answer;
+    }
+
+    /**
+     * Queries the database for projects where the given person is involved (regardless of their role).
+     *
+     * @param personToSearch The person to search for. This object must have come from one of the search/creation
+     *                       functions in this class to ensure that it has a valid database ID.
+     * @return A list of Project objects. If the query return no results, the list will be empty.
+     * @throws DatabaseException Some database error occurred (most likely an access error). Inspect the throwable
+     * contained within for more details.
+     */
+    public List<Project> getProjectsByPerson (Person personToSearch) throws DatabaseException{
+        final long ID = personToSearch.id;
+        final String EQUALS = " = ";
+        final String OR = " OR ";
+        ArrayList<Project> answer;
+        StringBuilder query = new StringBuilder();
+        query.append("SELECT * FROM ").append(ProjectTable.TABLE_NAME).append(" WHERE ")
+                .append(ProjectTable.COL_ENGINEER).append(EQUALS).append(ID).append(OR)
+                .append(ProjectTable.COL_CUSTOMER).append(EQUALS).append(ID).append(OR)
+                .append(ProjectTable.COL_PROJ_MANAGER).append(EQUALS).append(ID).append(OR)
+                .append(ProjectTable.COL_ARCHITECT).append(EQUALS).append(ID).append(';');
+        try (Statement statement = connection.createStatement()) {
+            ResultSet result = statement.executeQuery(query.toString());
+            answer = new ArrayList<>(getListOfProjectsFromResultSet(result));
+        } catch (SQLException ex) {
+            throw new DatabaseException("Database error while searching for projects", ex);
+        }
+        return answer;
+    }
+
+    /**
+     * Iterates through a given ResultSet that came from the Projects table and creates a Project object from each
+     * of the rows.
+     *
+     * @param resultSet The ResultSet as it was received from the Statement, with the cursor in the default position.
+     * @return A list of project objects. If the query returned no results then the list returned will be empty.
+     * @throws SQLException If some DB access error occurs or if the ResultSet is from the wrong table (not the Project
+     * table) and thus the column names don't match.
+     */
     private List<Project> getListOfProjectsFromResultSet(ResultSet resultSet) throws SQLException {
         ArrayList<Project> answer = new ArrayList<>();
         while (resultSet.next()) {
@@ -225,10 +342,21 @@ public class DataSource {
         return answer;
     }
 
+    /**
+     * Creates a Project object from the current row of the given ResultSet. <strong>Typically, you don't call this
+     * method directly and rather call getListOfProjectsFromResultSet which in turn calls this method.</strong> This
+     * method expects the cursor to be pointing at a valid row to be in the ResultSet (not before the first row or after
+     * the last).
+     *
+     * @param resultSet A ResultSet from a query of the Projects table with the cursor pointing at a valid row.
+     * @return A Project object created from the data in the row.
+     * @throws SQLException If some DB access error occurs or if the ResultSet is from the wrong table (not the Project
+     * table) and thus the column names don't match.
+     */
     private Project getProjectFromResultSet(ResultSet resultSet) throws SQLException{
         Project answer = new Project(
                 resultSet.getString(ProjectTable.COL_PROJECT_NAME),
-                getProjectTypeByID(resultSet.getLong(ProjectTable.COL_PROJECT_NAME)),
+                getProjectTypeByID(resultSet.getLong(ProjectTable.COL_TYPE)),
                 getPersonByID(resultSet.getLong(ProjectTable.COL_CUSTOMER))
         );
 
@@ -240,7 +368,8 @@ public class DataSource {
         answer.engineer = getPersonByID(resultSet.getLong(ProjectTable.COL_ENGINEER));
         answer.projectManager = getPersonByID(resultSet.getLong(ProjectTable.COL_PROJ_MANAGER));
         answer.architect = getPersonByID(resultSet.getLong(ProjectTable.COL_ARCHITECT));
-        answer.deadline = resultSet.getDate(ProjectTable.COL_DEADLINE).toLocalDate();
+        Date deadlineAsDate = resultSet.getDate(ProjectTable.COL_DEADLINE);
+        answer.deadline = deadlineAsDate != null ? deadlineAsDate.toLocalDate() : null;
         answer.status = getProjectStatusByID(resultSet.getLong(ProjectTable.COL_STATUS));
 
 
@@ -274,147 +403,155 @@ public class DataSource {
     }
 
     /**
-     * Executes a query  to cleanly (re)create the table in the Books table in the database.
-     * Can safely be call even if the table already exists but existing data will be destroyed.
-     * This method assumes that the correct default database has been set.
-     *
-     * @throws SQLException If an error occurs with the database connection.
-     */
-    private void createBookTable() throws SQLException {
-        Statement statement = connection.createStatement();
-        StringBuilder queryBuilder = new StringBuilder();
-
-        //Remove the table first if it exists to prevent a SQL error if it's already there.
-        queryBuilder.append("DROP TABLE IF EXISTS ").append(BOOK_TABLE_NAME).append(";");
-        statement.executeUpdate(queryBuilder.toString());
-        queryBuilder.setLength(0);
-
-        queryBuilder.append("CREATE TABLE ").append(BOOK_TABLE_NAME).append("(\n")
-                    .append("\t").append(COLUMN_ID)    .append(" INT NOT NULL UNIQUE AUTO_INCREMENT PRIMARY KEY,\n")
-                    .append("\t").append(COLUMN_TITLE) .append(" VARCHAR(").append(COLUMN_TITLE_SIZE).append(") NOT NULL,\n")
-                    .append("\t").append(COLUMN_AUTHOR).append(" VARCHAR(").append(COLUMN_AUTHOR_SIZE).append(") NOT NULL,\n")
-                    .append("\t").append(COLUMN_QTY)   .append(" INT DEFAULT 0\n")
-                    .append(");");
-        statement.addBatch(queryBuilder.toString());
-        queryBuilder.setLength(0);
-
-        //The task stipulates that the ID numbers should start from 3001;
-        queryBuilder.append("ALTER TABLE ").append(BOOK_TABLE_NAME).append(" AUTO_INCREMENT = 3001;");
-        statement.addBatch(queryBuilder.toString());
-
-        statement.executeBatch();
-        statement.close();
-    }
-
-    /**
-     * Convenience method to be used after the database is created initially.
-     * Creates the books table and inserts the initial data.
-     *
-     * @throws SQLException If an error occurs with the database connection.
-     */
-    public void initialiseBookTable() throws SQLException {
-        createBookTable();
-        insertInitialData();
-    }
-    
-    /**
-     * Executes a query to add a new book to the database with the given parameters
-     *
+     * Executes a query to add a new project to the database with the given parameters
+     * <p><br/>
      * This method assumes that the correct default database has been  and that the book
      * table already exists. This method uses prepared statements to handle
      * sanitising of the user input to prevent SQL injection attacks.
      *
-     * @param title      The title of the new book. (Does not need to be unique in the database)
-     * @param author     The author of the book
-     * @param qty        The initial quantity of the book in stock.
+     * @param projectName   The name of the new project. (Does not need to be unique in the database)
+     * @param type   The ProjectType enum value of the project.
+     * @param customer A Person Object representing customer. This represent a person already in the
+     *                 database (i.e. have a valid id number).
      *
-     * @return The ID of the new record or -1 on failure
+     * @return The project number of the new record or -1 on failure
      * @throws SQLException If an error occurs with the database connection.
      */
-    public int insertBook(String title, String author, int qty) throws SQLException {
+    public long insertProject(String projectName, ProjectType type, Person customer) throws DatabaseException {
         StringBuilder queryBuilder = new StringBuilder();
-        queryBuilder.append("INSERT INTO ").append(BOOK_TABLE_NAME).append(" (")
-                .append(COLUMN_TITLE).append(", ")
-                .append(COLUMN_AUTHOR).append(", ")
-                .append(COLUMN_QTY).append(") VALUES (?, ?, ?);");
-        PreparedStatement statement = connection.prepareStatement(queryBuilder.toString(),Statement.RETURN_GENERATED_KEYS);
-        statement.setString(1, title);
-        statement.setString(2, author);
-        statement.setInt(3, qty);
-        int rowsAffected = statement.executeUpdate();
+        queryBuilder.append("INSERT INTO ").append(ProjectTable.TABLE_NAME).append(" (")
+                .append(ProjectTable.COL_PROJECT_NAME).append(", ")
+                .append(ProjectTable.COL_TYPE).append(", ")
+                .append(ProjectTable.COL_CUSTOMER).append(") VALUES (?, ?, ?);");
+
         int newID = -1;
-        if (rowsAffected > 0) {
-            ResultSet keys = statement.getGeneratedKeys();
-            keys.next();
-            newID = keys.getInt(1);
-            keys.close();
+        try (PreparedStatement statement = connection.prepareStatement(queryBuilder.toString(),Statement.RETURN_GENERATED_KEYS)) {
+            statement.setString(1, projectName);
+            statement.setLong(2, type.id());
+            statement.setLong(3, customer.id);
+            final int rowsAffected = statement.executeUpdate();
+            if (rowsAffected > 0) {
+                ResultSet keys = statement.getGeneratedKeys();
+                keys.next();
+                newID = keys.getInt(1);
+            }
+        } catch (SQLException ex) {
+            throw new DatabaseException("Database error while adding new project", ex);
         }
-        statement.close();
         return newID;
     }
 
-    /**
-     * Inserts a new record into the books table using the data provided.
-     *
-     * @param newBook    A {@link Book} object that will be inserted.
-     *
-     * @return The id number of the new record or -1 on failure.
-     * @throws SQLException If an error occurs with the database connection.
-     */
-    public int insertBook( Book newBook) throws SQLException {
-        return insertBook(newBook.title, newBook.author, newBook.qty);
+    public long insertProject(Project projectToInsert) throws DatabaseException {
+        return insertProject(projectToInsert.name, projectToInsert.type, projectToInsert.customer);
+    }
+
+    public long insertPerson(String firstName, String surname, String address, String email) throws DatabaseException{
+        StringBuilder query = new StringBuilder()
+            .append("INSERT INTO ").append(PersonTable.TABLE_NAME).append(" (")
+            .append(PersonTable.COL_FIRST_NAME).append(", ")
+            .append(PersonTable.COL_SURNAME).append(", ")
+            .append(PersonTable.COL_PHYS_ADDR).append(", ")
+            .append(PersonTable.COL_EMAIL).append(") VALUES (?, ?, ?, ?);");
+        long newKey;
+        try (PreparedStatement statement = connection.prepareStatement(query.toString(), Statement.RETURN_GENERATED_KEYS)){
+            statement.setString( 1, firstName);
+            statement.setString( 2, surname);
+            statement.setString( 3, address);
+            statement.setString( 4, email);
+            statement.executeUpdate();
+            ResultSet keys = statement.getGeneratedKeys();
+            keys.next();
+            newKey = keys.getLong(1);
+        } catch (SQLException ex) {
+            throw new DatabaseException("Error while creating a new Person record.", ex);
+        }
+        return newKey;
+    }
+
+    public long insertPerson(Person newPerson) throws DatabaseException{
+        return insertPerson(newPerson.firstName, newPerson.surname, newPerson.address, newPerson.email);
     }
 
     /**
-     * Deletes a record in the books table of the given ID number.
+     * Deletes a record in the Projects table of the given ID number.
      * 
-     * @param idToDelete The ID number of the record to delete.
+     * @param projectNumberToDelete The Project number of the record to delete.
      *
-     * @return {@code true} on success
-     * @throws SQLException If an error occurs with the database connection.
+     * @return {@code true} if the table is modified.
+     * @throws DatabaseException If an error occurs with the database connection.
      */
-    public boolean deleteBook(int idToDelete) throws SQLException {
+    public boolean deleteProject(long projectNumberToDelete) throws DatabaseException {
         StringBuilder queryBuilder = new StringBuilder();
-        queryBuilder.append("DELETE FROM ").append(BOOK_TABLE_NAME)
-                .append(" WHERE ").append(COLUMN_ID).append(" = ")
-                .append(idToDelete).append(';');
-        Statement statement = connection.createStatement();
-        boolean success = statement.executeUpdate(queryBuilder.toString()) > 0;
-        statement.close();
+        queryBuilder.append("DELETE FROM ").append(ProjectTable.TABLE_NAME)
+                .append(" WHERE ").append(ProjectTable.COL_NUMBER).append(" = ")
+                .append(projectNumberToDelete).append(';');
+        boolean success = false;
+        try (Statement statement = connection.createStatement()) {
+            success = statement.executeUpdate(queryBuilder.toString()) > 0;
+        } catch (SQLException ex) {
+            throw new DatabaseException("Database error occurred while deleting a project.", ex);
+        }
         return success;
     }
 
     /**
-     * Deletes the record associated with the given {@link Book} object.
+     * Deletes the record associated with the given {@link Project} object.
      *
-     * @param bookToDelete A {@link Book} object representing the record to be deleted.
+     * @param projectToDelete A {@link Project} object representing the record to be deleted.
      * @return {@code true} if the database was modified.
-     * @throws SQLException If an error occurs with the database connection.
+     * @throws DatabaseException If an error occurs with the database connection.
      */
-    public boolean deleteBook(Book bookToDelete) throws SQLException {
-        return deleteBook(bookToDelete.id);
+    public boolean deleteProject(Project projectToDelete) throws DatabaseException {
+        return deleteProject(projectToDelete.number);
     }
 
-    /**
-     * Helper function for reading query results. Parses the current row of the given ResultSet object and creates a
-     * {@link Book} object for that. The method expects the ID, Title, Author and Qty columns to be present in the
-     * ResultSet.
-     *
-     * @param resultSet  The ResultSet to read.
-     * @return A {@link Book} object representing the information read.
-     * @throws SQLException If an error occurs with the database connection or if one of the expected columns is not
-     * present.
-     */
-    private Book getBookFromResultSet (ResultSet resultSet) throws SQLException{
-        Book answer = new Book();
-        answer.id = resultSet.getInt(COLUMN_ID);
-        answer.title = resultSet.getString(COLUMN_TITLE);
-        answer.author = resultSet.getString(COLUMN_AUTHOR);
-        answer.qty = resultSet.getInt(COLUMN_QTY);
-        return answer;
+    public boolean updateProject(Project projectToChange, HashMap<String, Object> changes) throws DatabaseException {
+        StringBuilder query = new StringBuilder();
+        final ArrayList<String> keys = new ArrayList<>(changes.keySet()); //Change the Set to a List to ensure the order of the keys doesn't change.
+
+        query.append("UPDATE ").append(ProjectTable.TABLE_NAME).append(" SET ");
+        for (int i = 0; i < keys.size(); ++i) {
+            query.append(keys.get(i)).append(" = ? ");
+            if (i <= keys.size() -2) {
+                query.append("AND ");
+            }
+        }
+        query.append("WHERE ").append(ProjectTable.COL_NUMBER).append(" = ").append(projectToChange.number);
+        System.out.println(query);
+        final Set<String> stringColumns = new HashSet<>();
+        stringColumns.add(ProjectTable.COL_PROJECT_NAME);
+        stringColumns.add(ProjectTable.COL_PHYS_ADDR);
+
+        final Set<String> decimalColumns = new HashSet<>();
+        decimalColumns.add(ProjectTable.COL_TOTAL_FEE);
+        decimalColumns.add(ProjectTable.COL_TOTAL_PAID);
+
+
+        int updateCount = 0;
+
+        try (PreparedStatement  statement = connection.prepareStatement(query.toString())) {
+            for (int i = 1; i <= keys.size(); i++) {
+                String currentKey = keys.get(i - 1);
+                Object currentValue = changes.get(currentKey);
+                if (currentKey.equals(ProjectTable.COL_ERF)) {
+                    statement.setInt(i, (int)currentValue);
+                } else if (stringColumns.contains(currentKey)) {
+                    statement.setString(i, (String) currentValue);
+                } else if (decimalColumns.contains(currentKey)) {
+                    statement.setBigDecimal(i, (BigDecimal) currentValue);
+                } else {
+                    statement.setLong(i, (long) currentValue);
+                }
+            }
+            updateCount = statement.executeUpdate();
+        }  catch (SQLException ex) {
+            throw new DatabaseException(" Database error while update project record.", ex);
+        }
+
+        return updateCount > 0;
     }
 
-    public List<Person> searchPeople(String searchName) throws SQLException{
+    public List<Person> searchPeople(String searchName) throws DatabaseException {
         StringBuilder queryPrefix = new StringBuilder();
         queryPrefix.append("SELECT ");
         for (int i = 0; i <PersonTable.ALL_COLUMN_NAMES.length; i++) {
@@ -435,33 +572,33 @@ public class DataSource {
         firstNameFuzzy.append(PersonTable.COL_FIRST_NAME).append(" LIKE ? ESCAPE '!';");
         surnameFuzzy.append(PersonTable.COL_SURNAME).append(" LIKE ? ESCAPE '!';");
 
-        PreparedStatement firstNameExactStatement = connection.prepareStatement(firstNameExact.toString());
-        PreparedStatement surnameExactStatement = connection.prepareStatement(surnameExact.toString());
-        PreparedStatement firstNameFuzzyStatement = connection.prepareStatement(firstNameFuzzy.toString());
-        PreparedStatement surnameFuzzyStatement = connection.prepareStatement(surnameFuzzy.toString());
+        ArrayList<Person> answer;
+        try(
+            PreparedStatement firstNameExactStatement = connection.prepareStatement(firstNameExact.toString());
+            PreparedStatement surnameExactStatement = connection.prepareStatement(surnameExact.toString());
+            PreparedStatement firstNameFuzzyStatement = connection.prepareStatement(firstNameFuzzy.toString());
+            PreparedStatement surnameFuzzyStatement = connection.prepareStatement(surnameFuzzy.toString());
+        ) {
+            firstNameExactStatement.setString(1, searchName);
+            surnameExactStatement.setString(1, searchName);
+            firstNameFuzzyStatement.setString(1, "%" + likeSanitize(searchName) + "%");
+            surnameFuzzyStatement.setString(1, "%" + likeSanitize(searchName) + "%");
 
-        firstNameExactStatement.setString(1, searchName);
-        surnameExactStatement.setString(1, searchName);
-        firstNameFuzzyStatement.setString(1, "%" + likeSanitise(searchName) + "%");
-        surnameFuzzyStatement.setString(1, "%" + likeSanitise(searchName) + "%");
+            ResultSet firstNameExactResult = firstNameExactStatement.executeQuery();
+            ResultSet surnameExactResult = surnameExactStatement.executeQuery();
+            ResultSet firstNameFuzzyResult = firstNameFuzzyStatement.executeQuery();
+            ResultSet surnameFuzzyResult = surnameFuzzyStatement.executeQuery();
 
-        ResultSet firstNameExactResult = firstNameExactStatement.executeQuery();
-        ResultSet surnameExactResult = surnameExactStatement.executeQuery();
-        ResultSet firstNameFuzzyResult = firstNameFuzzyStatement.executeQuery();
-        ResultSet surnameFuzzyResult = surnameFuzzyStatement.executeQuery();
+            answer = new ArrayList<>();
 
-        ArrayList<Person> answer = new ArrayList<>();
+            answer.addAll(getListOfPersonsFromResultSet(firstNameExactResult));
+            answer.addAll(getListOfPersonsFromResultSet(surnameExactResult));
+            answer.addAll(getListOfPersonsFromResultSet(firstNameFuzzyResult));
+            answer.addAll(getListOfPersonsFromResultSet(surnameFuzzyResult));
 
-        answer.addAll(getListOfPersonsFromResultSet(firstNameExactResult));
-        answer.addAll(getListOfPersonsFromResultSet(surnameExactResult));
-        answer.addAll(getListOfPersonsFromResultSet(firstNameFuzzyResult));
-        answer.addAll(getListOfPersonsFromResultSet(surnameFuzzyResult));
-
-        firstNameExactResult.close();
-        surnameExactResult.close();
-        firstNameFuzzyResult.close();
-        surnameFuzzyResult.close();
-
+        } catch (SQLException ex) {
+            throw new DatabaseException("Database error while searching people records.", ex);
+        }
         return answer;
     }
 
@@ -486,86 +623,6 @@ public class DataSource {
     }
 
 
-    /**
-     * Searches the database for records that matches the given search term and returns the results as a List of Book
-     * objects.
-     *
-     * This method performs two searches, one for an exact match as the user entered the search term and a second one
-     * that checks if the search term is somewhere in the middle of the search column's values. This allows the user to
-     * an approximate string or a single word from the book they are looking for and still find it.
-     *
-     * Because the search terms come from user input, this method uses PreparedStatements to escape any special
-     * characters and avoid injection attacks.
-     *
-     * @param criteria An enum value that specifies if the method must search through the titles or the authors.
-     * @param searchTerm The search term from the user.
-     * @return A list of the search results. The list may be empty if no positive matches were found.
-     * @throws SQLException If an error occurs with the database connection.
-     */
-    public List<Book> searchBooks(CliHandler.SearchCriteria criteria, String searchTerm) throws SQLException {
-        StringBuilder queryPrefix = new StringBuilder();
-        queryPrefix.append("SELECT ")
-            .append(COLUMN_ID).append(", ")
-            .append(COLUMN_TITLE).append(", ")
-            .append(COLUMN_AUTHOR).append(", ")
-            .append(COLUMN_QTY).append(" FROM ").append(BOOK_TABLE_NAME)
-            .append(" WHERE ");
-        switch (criteria) {
-            case ByTitle:
-                queryPrefix.append(COLUMN_TITLE);
-                break;
-            case ByAuthor:
-                queryPrefix.append(COLUMN_AUTHOR);
-                break;
-            default:
-                throw new AssertionError("Invalid search criteria in searchBooks method");
-        }
-
-        StringBuilder query = new StringBuilder();
-
-        query.append(queryPrefix)
-                .append(" = ?;");
-        PreparedStatement exactStatement = connection.prepareStatement(query.toString());
-        query.setLength(0);
-
-        query.append(queryPrefix)
-             .append(" LIKE ? ESCAPE '!';");
-        PreparedStatement fuzzyStatement = connection.prepareStatement(query.toString());
-
-        ArrayList<Book> answer = new ArrayList<>();
-        //Exact search
-        exactStatement.setString(1, searchTerm);
-        ResultSet exactResult = exactStatement.executeQuery();
-
-        //Search term as a prefix/suffix
-        fuzzyStatement.setString(1, "%" + likeSanitize(searchTerm) + "_%");
-        ResultSet fuzzyResult = fuzzyStatement.executeQuery();
-
-        answer.addAll(addBookToListFromResultSet(exactResult));
-        answer.addAll(addBookToListFromResultSet(fuzzyResult));
-
-        exactStatement.close();
-        fuzzyStatement.close();
-
-        return answer;
-    }
-
-    /**
-     * Helper method to read through all the rows of a result set, create Book objects from them, and returning them
-     * in a List Object
-     *
-     * @param resultSet The ResultSet to loop through
-     * @return The resulting List object
-     * @throws SQLException If an error occurs with the database connection.
-     */
-    private List<Book> addBookToListFromResultSet(ResultSet resultSet) throws SQLException {
-        ArrayList<Book> answer = new ArrayList<>();
-        while (resultSet.next()) {
-            Book newBook = getBookFromResultSet(resultSet);
-            answer.add(newBook);
-        }
-        return answer;
-    }
 
     /**
      * <p>
@@ -594,113 +651,6 @@ public class DataSource {
                 .replace("%", "!%")
                 .replace("_", "!_")
                 .replace("[", "![");
-    }
-
-    /**
-     * Helper method to create a template for UPDATE query Statements. The result should be used in a PreparedStatement.
-     *
-     * @param column The name of the column being updated
-     * @return A parameterized update statement.
-     */
-    private String getUpdateQuery(String column) {
-        StringBuilder queryBuilder = new StringBuilder();
-        queryBuilder.append("UPDATE ").append(BOOK_TABLE_NAME).append(" SET ").append(column)
-                .append(" = ? WHERE ").append(COLUMN_ID).append(" = ?;");
-        return queryBuilder.toString();
-    }
-
-
-    /**
-     * Updates a record in the books table of the given ID number by changing the
-     * title.
-     *
-     * @param idToChange The ID number of the record to update.
-     * @param newTitle   The new book title.
-     *
-     * @return {@code true} if the database was modified
-     * @throws SQLException If an error occurs with the database connection.
-     */
-    private boolean updateTitle(int idToChange, String newTitle) throws SQLException {
-        PreparedStatement statement = connection.prepareStatement(getUpdateQuery(COLUMN_TITLE));
-        statement.setString(1, newTitle);
-        statement.setInt(2, idToChange);
-        return statement.executeUpdate() > 0;
-    }
-
-    /**
-     * Updates a record in the books table of the Book object by changing the
-     * title.
-     *
-     * @param bookToChange The Book object of the record to update.
-     * @param newTitle   The new book title.
-     *
-     * @return {@code true} if the database was modified
-     * @throws SQLException If an error occurs with the database connection.
-     */
-    public boolean updateTitle(Book bookToChange, String newTitle) throws SQLException {
-        return updateTitle(bookToChange.id, newTitle);
-    }
-
-    /**
-     * Updates a record in the books table of the given ID number by changing the
-     * author.
-     *
-     * @param idToChange The ID number of the record to update.
-     * @param newAuthor   The new book author.
-     *
-     * @return {@code true} if the database was modified
-     * @throws SQLException If an error occurs with the database connection.
-     */
-    public boolean updateAuthor( int idToChange, String newAuthor) throws SQLException {
-        PreparedStatement statement = connection.prepareStatement(getUpdateQuery(COLUMN_AUTHOR));
-        statement.setString(1, newAuthor);
-        statement.setInt(2, idToChange);
-        return statement.executeUpdate() > 0;
-    }
-
-    /**
-     * Updates a record in the books table of the Book object by changing the
-     * author.
-     *
-     * @param bookToChange The Book object of the record to update.
-     * @param newAuthor   The new book title.
-     *
-     * @return {@code true} if the database was modified
-     * @throws SQLException If an error occurs with the database connection.
-     */
-    public boolean updateAuthor(Book bookToChange, String newAuthor) throws SQLException {
-        return updateAuthor(bookToChange.id, newAuthor);
-    }
-
-    /**
-     * Updates a record in the books table of the given ID number by changing the
-     * quantity.
-     *
-     * @param idToChange The ID number of the record to update.
-     * @param newQty   The new book quantity.
-     *
-     * @return {@code true} if the database was modified
-     * @throws SQLException If an error occurs with the database connection.
-     */
-    public boolean updateQty( int idToChange, int newQty) throws SQLException {
-        PreparedStatement statement = connection.prepareStatement(getUpdateQuery(COLUMN_QTY));
-        statement.setInt(1, newQty);
-        statement.setInt(2, idToChange);
-        return statement.executeUpdate() > 0;
-    }
-
-    /**
-     * Updates a record in the books table of the Book object by changing the
-     * quantity.
-     *
-     * @param bookToChange The Book object of the record to update.
-     * @param newQty   The new book quantity.
-     *
-     * @return {@code true} if the database was modified
-     * @throws SQLException If an error occurs with the database connection.
-     */
-    public boolean updateQty(Book bookToChange, int newQty) throws SQLException {
-        return updateQty(bookToChange.id, newQty);
     }
 
     /**

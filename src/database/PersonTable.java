@@ -3,9 +3,9 @@ package database;
 import java.util.ArrayList;
 import java.util.List;
 
-public class PersonTable extends DatabaseTable{
+public class PersonTable {
 
-    static public final String TABLE_NAME = "MainProgram.Person";
+    static public final String TABLE_NAME = "Person";
     //Columns
     static public final String COL_ID = "ID";
 
@@ -38,7 +38,7 @@ public class PersonTable extends DatabaseTable{
                 .append("  ").append(COL_SURNAME).append(" varchar(").append(COL_SURNAME_SIZE).append(") DEFAULT NULL,\n")
                 .append("  ").append(COL_EMAIL).append(" varchar(").append(COL_EMAIL_SIZE).append(") DEFAULT NULL,\n")
                 .append("  ").append(COL_PHYS_ADDR).append(" varchar(").append(COL_PHYS_ADDR_SIZE).append(") DEFAULT NULL,\n")
-                .append("  ").append("PRIMARY KEY (").append(COL_ID).append("\n")
+                .append("  ").append("PRIMARY KEY (").append(COL_ID).append(")\n")
                 .append(") COMMENT='Records of all actors in the PM process from customers to engineers'");
         return query.toString();
     }

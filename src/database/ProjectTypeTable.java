@@ -3,9 +3,9 @@ package database;
 import java.util.ArrayList;
 import java.util.List;
 
-public class ProjectTypeTable extends DatabaseTable{
+public class ProjectTypeTable {
     
-    static public final String TABLE_NAME = "MainProgram.ProjectType";
+    static public final String TABLE_NAME = "ProjectType";
     
     static public final String COL_ID = "ID";
     static public final String COL_NAME = "Name";
@@ -55,7 +55,7 @@ public class ProjectTypeTable extends DatabaseTable{
         for (int i = 1; i <= numOfEntries; i++) {
             answer.add(new StringBuilder(queryBase)
                 .append(i).append(", ")
-                .append('\'').append(INITIAL_NAMES[i-1]).append(");").toString());
+                .append('\'').append(INITIAL_NAMES[i-1]).append("');").toString());
 
         }
         return answer;
