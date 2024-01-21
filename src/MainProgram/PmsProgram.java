@@ -26,7 +26,8 @@ public class PmsProgram {
     public static void main (String[] args) {
         CliHandler consoleHandler = new CliHandler();
         if (args.length > 0 && args[0].equals("-t")) {
-            credentials = new DatabaseCredentials("mariadb", "Localhost", "3306", "Jason", "KochiraDozo", "PoisePMS");
+            credentials = new DatabaseCredentials("mariadb", "localhost", "3306", "Jason", "KochiraDozo", "PoisePMS");
+            System.out.println(credentials);
         } else {
             credentials = getCredentialsFromUser(consoleHandler);
         }
