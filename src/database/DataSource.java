@@ -618,8 +618,8 @@ public class DataSource {
         ) {
             firstNameExactStatement.setString(1, likeSanitize(searchName) + "%");
             surnameExactStatement.setString(1, likeSanitize(searchName) + "%");
-            firstNameFuzzyStatement.setString(1, "%" + likeSanitize(searchName) + "%");
-            surnameFuzzyStatement.setString(1, "%" + likeSanitize(searchName) + "%");
+            firstNameFuzzyStatement.setString(1, "_%" + likeSanitize(searchName) + "%");
+            surnameFuzzyStatement.setString(1, "_%" + likeSanitize(searchName) + "%");
 
             ResultSet firstNameExactResult = firstNameExactStatement.executeQuery();
             ResultSet surnameExactResult = surnameExactStatement.executeQuery();
