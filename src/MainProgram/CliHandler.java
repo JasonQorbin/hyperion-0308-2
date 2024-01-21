@@ -346,7 +346,7 @@ class CliHandler {
 
             switch (choice) {
                 case 1:
-                    updateProjectDetailMenu(selectedProject);
+                    selectedProject = updateProjectDetailMenu(selectedProject);
                     break;
                 case 2:
 
@@ -389,7 +389,7 @@ class CliHandler {
             menuText.append(projectToChange.projectManager == null ? "9. Assign project manager\n" : "9. Reassign project manager\n");
             menuText.append(projectToChange.architect == null ? "10. Assign architect\n" : "10. Reassign architect\n");
             menuText.append("11. Change project type\n\n");
-            if (changes.size() > 0) {
+            if (!changes.isEmpty()) {
                 menuText.append("'S'= Save changes and exit\n");
             }
             menuText.append("'Q'= Quit without saving\n\n");
@@ -506,7 +506,7 @@ class CliHandler {
                         break;
                     case 8: //Change engineer
                         newPerson = getNewAssignee(projectToChange.engineer, "engineer");
-                        if (projectToChange.engineer.id != newPerson.id) {
+                        if (projectToChange.engineer == null || projectToChange.engineer.id != newPerson.id) {
                             changes.put(ProjectTable.COL_ENGINEER, newPerson.id);
                         } else {
                             changes.remove(ProjectTable.COL_ENGINEER);
@@ -514,7 +514,7 @@ class CliHandler {
                         break;
                     case 9: //Change PM
                         newPerson = getNewAssignee(projectToChange.projectManager, "project manager");
-                        if (projectToChange.projectManager.id != newPerson.id) {
+                        if (projectToChange.projectManager == null || projectToChange.projectManager.id != newPerson.id) {
                             changes.put(ProjectTable.COL_PROJ_MANAGER, newPerson.id);
                         } else {
                             changes.remove(ProjectTable.COL_PROJ_MANAGER);
@@ -522,7 +522,7 @@ class CliHandler {
                         break;
                     case 10: //Change architect
                         newPerson = getNewAssignee(projectToChange.architect, "architect");
-                        if (projectToChange.architect.id != newPerson.id) {
+                        if (projectToChange.architect == null || projectToChange.architect.id != newPerson.id) {
                             changes.put(ProjectTable.COL_ARCHITECT, newPerson.id);
                         } else {
                             changes.remove(ProjectTable.COL_ARCHITECT);
@@ -542,6 +542,7 @@ class CliHandler {
         if (input.equalsIgnoreCase("S")) {
             //Process all the changes and update the selected object
             DataSource dataSource = DataSource.getInstance();
+            System.out.println("About to update the project");
             if (dataSource.updateProject(projectToChange, changes)) {
                 return dataSource.getProjectByNumber(projectToChange.number);
             }
