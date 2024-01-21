@@ -38,4 +38,19 @@ public class Project implements Pickable {
     public String getOneLineString() {
         return toString();
     }
+
+    public String getFullDescription() {
+        StringBuilder builder = new StringBuilder()
+                .append("Project: ").append(name).append(" (").append(type).append(')')
+                .append("\n\n")
+                .append("Address: ").append(address == null ? '\t' : address)
+                .append("\tERF: ").append(erfNum == 0 ? '\t' : erfNum).append('\n')
+                .append("Total Fee: ").append(totalFee).append("\tPaid to-date: ").append(totalPaid).append('\n')
+                .append("Customer: ").append(customer.fullName())
+                .append("\t\tProject Manager: ").append(projectManager == null ? '\t' : projectManager.fullName()).append('\n')
+                .append("Architect: ").append(architect == null ? "\t\t" : architect.fullName())
+                .append("\t\tEngineer: ").append(engineer == null ? '\t' : engineer.fullName()).append("\n\n");
+        return builder.toString();
+
+    }
 }
