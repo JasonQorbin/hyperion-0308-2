@@ -51,13 +51,14 @@ class CliHandler {
             2. View & Select from all ongoing projects
             3. View & Select from all overdue projects
             4. View & Select from all projects
-            5. Progress/Edit/Delete the selected project
+            5. Edit people
+            6. Progress/Edit/Delete the selected project
             0. Exit
             """
         );
         System.out.println("Selected project: " + selectedProject.getOneLineString());
         boolean haveValidInput = false;
-        return getMenuChoice("Menu choice: ", 0, 5);
+        return getMenuChoice("Menu choice: ", 0, 6);
     }
 
     /**
@@ -76,11 +77,12 @@ class CliHandler {
             2. View & Select from all ongoing projects
             3. View & Select from all overdue projects
             4. View & Select from all projects
+            5. Edit people
             0. Exit
             """
         );
         System.out.println();
-        return getMenuChoice("Menu choice: ", 0, 4);
+        return getMenuChoice("Menu choice: ", 0, 5);
     }
 
 
@@ -349,7 +351,7 @@ class CliHandler {
                     selectedProject = updateProjectDetailMenu(selectedProject);
                     break;
                 case 2:
-
+                    selectedProject.advanceStage();
                     break;
                 case 3:
                     if (deleteProject(selectedProject)) {
@@ -548,6 +550,80 @@ class CliHandler {
             }
         }
         return projectToChange;
+    }
+
+    public void editPeople() throws DatabaseException{
+        final int maxLength = PersonTable.COL_FIRST_NAME_SIZE;
+        String searchTerm = getStringFromUser("Enter a person's name to search for [blank to list all records]: ",
+                maxLength, "Names are limited to " + maxLength + "characters.", true);
+        Person personToEdit = null;
+        DataSource dataSource = DataSource.getInstance();
+        ArrayList<Pickable> results;
+        if (searchTerm.isBlank()) {
+            results = new ArrayList<>(dataSource.getAllPeople());
+        } else {
+            results = new ArrayList<>(dataSource.searchPeople(searchTerm));
+        }
+        personToEdit = (Person) printAndPickResult(results);
+
+        int choice = -1;
+        while (choice != 0) {
+            choice = personEditMenu(personToEdit);
+            String input;
+            int maxInput = 0;
+            switch (choice) {
+                case 1:
+                    maxInput = PersonTable.COL_FIRST_NAME_SIZE;
+                    input = getStringFromUser("New first name: ", maxInput,
+                            "Names are limited to " + maxInput + " characters.", false);
+                    if (dataSource.updatePerson(personToEdit, PersonTable.COL_FIRST_NAME, input)) {
+                        personToEdit.firstName = input;
+                    }
+                    break;
+                case 2:
+                    maxInput = PersonTable.COL_SURNAME_SIZE;
+                    input = getStringFromUser("New surname: ", maxInput,
+                            "Names are limited to " + maxInput + " characters.", false);
+                    if (dataSource.updatePerson(personToEdit, PersonTable.COL_SURNAME, input)) {
+                        personToEdit.surname = input;
+                    }
+                    break;
+                case 3:
+                    maxInput = PersonTable.COL_EMAIL_SIZE;
+                    input = getStringFromUser("New e-mail: ", maxInput,
+                            "E-mails are limited to " + maxInput + " characters.", false);
+                    if (dataSource.updatePerson(personToEdit, PersonTable.COL_EMAIL, input)) {
+                        personToEdit.email = input;
+                    }
+                    break;
+                case 4:
+                    maxInput = PersonTable.COL_PHYS_ADDR_SIZE;
+                    input = getStringFromUser("New address: ", maxInput,
+                            "Addresses are limited to " + maxInput + " characters.", false);
+                    if (dataSource.updatePerson(personToEdit, PersonTable.COL_PHYS_ADDR, input)) {
+                        personToEdit.address = input;
+                    }
+                    break;
+            }
+        }
+
+    }
+
+    private int personEditMenu(Person selectedPerson) {
+        int choice = -1;
+        System.out.println("Selected person:\n" + selectedPerson.toString());
+        System.out.println(""" 
+                What would you like to change in the selected item?
+                1. Update firstName
+                2. Update surname
+                3. Update e-mail
+                4. Update address
+                0. Return to Main Menu
+                """);
+
+        choice = getMenuChoice("Make a selection [0 to cancel]: ", 0, 4);
+        System.out.println();
+        return choice;
     }
 
     private String getNewStringValueForUpdateMenu(String promptPrefix, String oldValue, int maxLength, String lengthErrorMsg){

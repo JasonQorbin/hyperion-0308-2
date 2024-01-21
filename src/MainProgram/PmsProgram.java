@@ -19,6 +19,7 @@ public class PmsProgram {
         VIEW_LATE,
         SEARCH_ALL,
         EDIT_PROJECT,
+        EDIT_PEOPLE,
         EXIT
     }
     private static DatabaseCredentials credentials;
@@ -44,7 +45,6 @@ public class PmsProgram {
             System.out.println("Fatal error: Could not initialise database configuration.\n");
             System.out.println(ex.getMessage());
             System.out.println(ex.getCause().getMessage());
-            ex.getCause().printStackTrace();
             consoleHandler.close();
             return;
         }
@@ -84,6 +84,11 @@ public class PmsProgram {
                     case EDIT_PROJECT:
                         currentSelection = consoleHandler.updateMenu(currentSelection);
                         programState = ProgramState.MAIN_MENU;
+                        break;
+                    case EDIT_PEOPLE:
+                        consoleHandler.editPeople();
+                        programState = ProgramState.MAIN_MENU;
+                        break;
                 }
             } catch (DatabaseException exc) {
                 System.out.println("Database error occurred. Check the status of the database and consider restarting the program.");
@@ -113,6 +118,8 @@ public class PmsProgram {
             case 4:
                 yield ProgramState.SEARCH_ALL;
             case 5:
+                yield ProgramState.EDIT_PEOPLE;
+            case 6:
                 yield ProgramState.EDIT_PROJECT;
             case 0:
                 yield ProgramState.EXIT;

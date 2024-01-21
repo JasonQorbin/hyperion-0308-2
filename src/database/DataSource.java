@@ -603,20 +603,20 @@ public class DataSource {
         StringBuilder surnameExact = new StringBuilder(queryPrefix);
         StringBuilder surnameFuzzy = new StringBuilder(queryPrefix);
 
-        firstNameExact.append(PersonTable.COL_FIRST_NAME).append(" = ?;");
-        surnameExact.append(PersonTable.COL_SURNAME).append(" = ?;");
+        firstNameExact.append(PersonTable.COL_FIRST_NAME).append(" LIKE ? ESCAPE '!';");
+        surnameExact.append(PersonTable.COL_SURNAME).append(" LIKE ? ESCAPE '!';");
         firstNameFuzzy.append(PersonTable.COL_FIRST_NAME).append(" LIKE ? ESCAPE '!';");
         surnameFuzzy.append(PersonTable.COL_SURNAME).append(" LIKE ? ESCAPE '!';");
 
-        ArrayList<Person> answer;
+        ArrayList<Person> answer = new ArrayList<>();
         try(
             PreparedStatement firstNameExactStatement = connection.prepareStatement(firstNameExact.toString());
             PreparedStatement surnameExactStatement = connection.prepareStatement(surnameExact.toString());
             PreparedStatement firstNameFuzzyStatement = connection.prepareStatement(firstNameFuzzy.toString());
             PreparedStatement surnameFuzzyStatement = connection.prepareStatement(surnameFuzzy.toString());
         ) {
-            firstNameExactStatement.setString(1, searchName);
-            surnameExactStatement.setString(1, searchName);
+            firstNameExactStatement.setString(1, likeSanitize(searchName) + "%");
+            surnameExactStatement.setString(1, likeSanitize(searchName) + "%");
             firstNameFuzzyStatement.setString(1, "%" + likeSanitize(searchName) + "%");
             surnameFuzzyStatement.setString(1, "%" + likeSanitize(searchName) + "%");
 
@@ -624,8 +624,6 @@ public class DataSource {
             ResultSet surnameExactResult = surnameExactStatement.executeQuery();
             ResultSet firstNameFuzzyResult = firstNameFuzzyStatement.executeQuery();
             ResultSet surnameFuzzyResult = surnameFuzzyStatement.executeQuery();
-
-            answer = new ArrayList<>();
 
             answer.addAll(getListOfPersonsFromResultSet(firstNameExactResult));
             answer.addAll(getListOfPersonsFromResultSet(surnameExactResult));
@@ -638,6 +636,13 @@ public class DataSource {
         return answer;
     }
 
+    /**
+     * Creates a list of Person object from the rows of a ResultSet returned from the Person table.
+     *
+     * @param resultSet A ResultSet from the Person table with the cursor in the default position.
+     * @return A List of Person objects. Will return an empty list if the ResultSet is empty.
+     * @throws SQLException If the ResultSet is not from the Person table (i.e. the column names don't match)
+     */
     private List<Person> getListOfPersonsFromResultSet(ResultSet resultSet) throws SQLException {
         ArrayList<Person> answer = new ArrayList<>();
         while (resultSet.next()) {
@@ -647,6 +652,16 @@ public class DataSource {
         return answer;
     }
 
+    /**
+     * Helper method to create a Person object from a Result Set from the Person table. Normally you would not call
+     * this method directly which is why it is private. This method gets called by the getListOfPersonsFromResultSet
+     * method. This method expects the cursor of the ResultSet to be pointing at a valid row.
+     *
+     *
+     * @param resultSet A ResultSet from the Person table pointing at a valid row.
+     * @return A Person object created from the information returned.
+     * @throws SQLException If the column names don't match (i.e. the ResultSet didn't come from the Person table.
+     */
     private Person getPersonFromResultSet(ResultSet resultSet) throws SQLException{
         Person answer = new Person();
         answer.id = resultSet.getLong(PersonTable.COL_ID);
@@ -658,7 +673,29 @@ public class DataSource {
         return answer;
     }
 
-
+    /**
+     * Creates an UPDATE query to update one value in the record related to the given Person object
+     *
+     * @param personToUpdate The person being updated
+     * @param column The database column name being updated
+     * @param newValue The new value as a String (all the fields of the Person object are Strings)
+     * @return {@code true} if the database is modified.
+     * @throws DatabaseException If an error occurs with the database.
+     */
+    public boolean updatePerson(Person personToUpdate, String column, String newValue) throws DatabaseException {
+        String query = new StringBuilder()
+                .append("UPDATE ").append(PersonTable.TABLE_NAME).append(" SET ").append(column)
+                .append(" = ? WHERE ").append(PersonTable.COL_ID)
+                .append(" = ").append(personToUpdate.id).append(';').toString();
+        int updateCount = 0;
+        try (PreparedStatement statement = connection.prepareStatement(query)) {
+            statement.setString(1, newValue);
+            updateCount = statement.executeUpdate();
+        } catch (SQLException ex) {
+            throw new DatabaseException("Database error while update a person record", ex);
+        }
+        return updateCount > 0;
+    }
 
     /**
      * <p>
