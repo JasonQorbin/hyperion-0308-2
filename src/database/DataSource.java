@@ -198,6 +198,12 @@ public class DataSource {
         return updateCount;
     }
 
+    /**
+     * Helper method for bulk execution of INSERT queries. Used for inserting initial data into the database.
+     *
+     * @param insertQueries A list of Strings (INSERT queries)
+     * @throws DatabaseException If a database error occurs.
+     */
     private void executeBatchInsert(List<String> insertQueries) throws DatabaseException{
         try(Statement statement = connection.createStatement()) {
             for (String insertQuery : insertQueries) {
@@ -209,6 +215,15 @@ public class DataSource {
         }
     }
 
+    /**
+     * Helper method that searches for project with a custom WHERE clause that must have an unsafe String applied as a
+     * parameter. Use this when handling a search term received from the user.
+     *
+     * @param whereClause The WHERE clause to use (should not end with a ';')
+     * @param stringParameter A string parameter that may be unsafe in terms of SQL injection.
+     * @return A list of result (Project objects)
+     * @throws DatabaseException If a database error occurs.
+     */
     private List<Project> getProjectsByStringSearch(String whereClause, String stringParameter) throws DatabaseException{
         ArrayList<Project> answer = new ArrayList<>();
         StringBuilder query = new StringBuilder();
@@ -226,6 +241,13 @@ public class DataSource {
         return answer;
     }
 
+    /**
+     * Helper method that searches for project with a custom WHERE clause.
+     *
+     * @param whereClause The WHERE clause to use (should not end with a ';')
+     * @return A list of result (Project objects)
+     * @throws DatabaseException If a database error occurs.
+     */
     private List<Project> getProjectsBySearch(String whereClause) throws DatabaseException {
         ArrayList<Project> answer = new ArrayList<>();
         StringBuilder query = new StringBuilder();
@@ -243,6 +265,13 @@ public class DataSource {
         return answer;
     }
 
+    /**
+     * Fetch a project from the database based on its project number.
+     *
+     * @param number The project number
+     * @return A Project object
+     * @throws DatabaseException If a Database error occurs.
+     */
     public Project getProjectByNumber(long number) throws DatabaseException {
         StringBuilder whereClause  = new StringBuilder();
         whereClause.append("WHERE ").append(ProjectTable.COL_NUMBER).append(" = ").append(number);
@@ -256,10 +285,21 @@ public class DataSource {
         }
     }
 
+    /**
+     * Returns a  list of all projects
+     *
+     * @return A list of all project.
+     * @throws DatabaseException If a database error occurs.
+     */
     private List<Project> getAllProjects() throws DatabaseException{
         return getProjectsBySearch(null);
     }
 
+    /**
+     * Returns a list of all projects that have not been finalised, whose deadline date is either NULL or in the future.
+     * @return A list of currently active and not overdue projects.
+     * @throws DatabaseException If a database error occurs
+     */
     public List<Project>getCurrentProjects() throws DatabaseException{
         StringBuilder whereClause = new StringBuilder();
         whereClause.append("WHERE (").append(ProjectTable.COL_DEADLINE).append(" IS NULL OR ")
@@ -442,10 +482,27 @@ public class DataSource {
         return newID;
     }
 
+    /**
+     * Adds a project to the database
+     *
+     * @param projectToInsert The project to add.
+     * @return The new project number. Should be applied to the object to maintain consistency.
+     * @throws DatabaseException If a database error occurs.
+     */
     public long insertProject(Project projectToInsert) throws DatabaseException {
         return insertProject(projectToInsert.name, projectToInsert.type, projectToInsert.customer);
     }
 
+    /**
+     * Adds a new Person to the database.
+     *
+     * @param firstName
+     * @param surname
+     * @param address
+     * @param email
+     * @return The ID of the new record. Should be applied to the in-memory object representing this Person.
+     * @throws DatabaseException if a database error occurs.
+     */
     public long insertPerson(String firstName, String surname, String address, String email) throws DatabaseException{
         StringBuilder query = new StringBuilder()
             .append("INSERT INTO ").append(PersonTable.TABLE_NAME).append(" (")
@@ -506,6 +563,14 @@ public class DataSource {
         return deleteProject(projectToDelete.number);
     }
 
+    /**
+     * Called from the update menu. Changes several fields of a project in the database at once.
+     *
+     * @param projectToChange The Project to change
+     * @param changes A hash map of changes where the key is the column to change and the value is the new value.
+     * @return {@code true} if the database is modified.
+     * @throws DatabaseException if a database error occurs.
+     */
     public boolean updateProject(Project projectToChange, HashMap<String, Object> changes) throws DatabaseException {
         StringBuilder query = new StringBuilder();
         final ArrayList<String> keys = new ArrayList<>(changes.keySet()); //Change the Set to a List to ensure the order of the keys doesn't change.
@@ -551,6 +616,15 @@ public class DataSource {
         return updateCount > 0;
     }
 
+    /**
+     * Changes the project status of the given project. The validation check of this change is done in the Project
+     * object.
+     *
+     * @param projectNumber The ID of the project to change.
+     * @param newStage The ID of the new project stage.
+     * @return {@code true} if the database is changed
+     * @throws DatabaseException If a database error occurs.
+     */
     public boolean changeStage(long projectNumber, long newStage) throws DatabaseException {
         StringBuilder query = new StringBuilder()
                 .append("UPDATE ").append(ProjectTable.TABLE_NAME).append(" SET ")
@@ -565,6 +639,12 @@ public class DataSource {
         return updateCount > 0;
     }
 
+    /**
+     * Returns all people in the database as a list.
+     *
+     * @return A list of all the people in the database.
+     * @throws DatabaseException If a database error occurs.
+     */
     public List<Person> getAllPeople() throws DatabaseException{
         StringBuilder query = new StringBuilder()
                 .append("SELECT * FROM ").append(PersonTable.TABLE_NAME).append(';');
