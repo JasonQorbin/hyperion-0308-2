@@ -1,5 +1,8 @@
 package MainProgram;
 
+import database.DataSource;
+import database.DatabaseException;
+
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
@@ -25,6 +28,98 @@ public class Project implements Pickable {
         this.type = type;
         this.customer = customer;
         this.status = ProjectStatus.CAPTURED;
+    }
+
+    private boolean canBeLogged() {
+        return status == ProjectStatus.CAPTURED && address != null && !address.isBlank() && erfNum > 0;
+    }
+
+    private boolean canGoToConcept() {
+        return status == ProjectStatus.LOGGED && architect != null;
+    }
+
+    private boolean canGoToPreFeas() {
+        return status == ProjectStatus.CONCEPT && engineer != null;
+    }
+
+    private boolean canGoToBankable() {
+        return status == ProjectStatus.PREFEAS && projectManager != null;
+    }
+
+    private boolean canGoToConstruction() {
+        final BigDecimal ZERO = BigDecimal.valueOf(0);
+        return status == ProjectStatus.BANKABLE && totalFee.compareTo(ZERO) > 0;
+    }
+
+    private boolean canBeFinalised() {
+        final BigDecimal ZERO = BigDecimal.valueOf(0);
+        return status == ProjectStatus.CONSTRUCTION && totalPaid.compareTo(ZERO) > 0;
+    }
+
+    public void advanceStage() throws DatabaseException {
+        DataSource dataSource = DataSource.getInstance();
+        switch (status){
+            case CAPTURED:
+                if (canBeLogged()) {
+                    if(dataSource.changeStage(number, status.id() + 1 )) {
+                        status = ProjectStatus.LOGGED;
+                        System.out.println("The project is now in " + status + " stage.\n");
+                    }
+                } else {
+                    System.out.println("To advance the project please capture the address and ERF number of the property");
+                }
+                break;
+            case LOGGED:
+                if (canGoToConcept()) {
+                    if(dataSource.changeStage(number, status.id() + 1 )) {
+                        status = ProjectStatus.CONCEPT;
+                        System.out.println("The project is now in " + status + " stage.\n");
+                    }
+                } else {
+                    System.out.println("To advance the project please assign an architect");
+                }
+                break;
+            case CONCEPT:
+                if (canGoToPreFeas()) {
+                    if(dataSource.changeStage(number, status.id() + 1 )) {
+                        status = ProjectStatus.PREFEAS;
+                        System.out.println("The project is now in " + status + " stage.\n");
+                    }
+                } else {
+                    System.out.println("To advance the project please assign an engineer");
+                }
+                break;
+            case PREFEAS:
+                if (canGoToBankable()) {
+                    if(dataSource.changeStage(number, status.id() + 1 )) {
+                        status = ProjectStatus.BANKABLE;
+                        System.out.println("The project is now in " + status + " stage.\n");
+                    }
+                } else {
+                    System.out.println("To advance the project please assign an project manager");
+                }
+                break;
+            case BANKABLE:
+                if (canGoToConstruction()) {
+                    if(dataSource.changeStage(number, status.id() + 1 )) {
+                        status = ProjectStatus.CONSTRUCTION;
+                        System.out.println("The project is now in " + status + " stage.\n");
+                    }
+                } else {
+                    System.out.println("To advance the project please capture the project's total budget/fee");
+                }
+                break;
+            case CONSTRUCTION:
+                if (canBeFinalised()) {
+                    if(dataSource.changeStage(number, status.id() + 1 )) {
+                        status = ProjectStatus.FINAL;
+                        System.out.println("The project is now in finalised.\n");
+                    }
+                } else {
+                    System.out.println("To advance the project please capture the total amount paid.");
+                }
+                break;
+        }
     }
 
     @Override

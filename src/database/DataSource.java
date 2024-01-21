@@ -550,6 +550,43 @@ public class DataSource {
         return updateCount > 0;
     }
 
+    public boolean changeStage(long projectNumber, long newStage) throws DatabaseException {
+        StringBuilder query = new StringBuilder()
+                .append("UPDATE ").append(ProjectTable.TABLE_NAME).append(" SET ")
+                .append(ProjectTable.COL_STATUS).append(" = ").append(newStage).append(';');
+        int updateCount = 0;
+        try(Statement statement = connection.createStatement()) {
+            updateCount = statement.executeUpdate(query.toString());
+        } catch (SQLException ex) {
+            throw new DatabaseException("Error while trying to update a project stage", ex);
+        }
+
+        return updateCount > 0;
+    }
+
+    public List<Person> getAllPeople() throws DatabaseException{
+        StringBuilder query = new StringBuilder()
+                .append("SELECT * FROM ").append(PersonTable.TABLE_NAME).append(';');
+        ArrayList<Person> answer = new ArrayList<>();
+        try (Statement statement = connection.createStatement()) {
+            ResultSet result = statement.executeQuery(query.toString());
+            answer = new ArrayList<>(getListOfPersonsFromResultSet(result));
+        } catch (SQLException ex) {
+            throw new DatabaseException("Database error while fetching all person records.", ex);
+        }
+        return answer;
+    }
+
+    /**
+     * Searches the database for the given name and returns a list of Persons that likely match it. Searches both first
+     * name and surname fields and priorities results where the search term appears at the start of the field (i.e. the
+     * user typed exactly want they wanted), thereafter returns results where the search term is somewhere in the
+     * middle of the field (i.e. the user entered some approximate value).
+     *
+     * @param searchName The string to search for
+     * @return A list of possible matches for the user to pick from. Returns an empty list if nothing was found.
+     * @throws DatabaseException If a database error is encountered.
+     */
     public List<Person> searchPeople(String searchName) throws DatabaseException {
         StringBuilder queryPrefix = new StringBuilder();
         queryPrefix.append("SELECT ");
