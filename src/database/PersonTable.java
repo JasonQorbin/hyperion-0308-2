@@ -32,12 +32,12 @@ public class PersonTable {
     public static String getCreationQuery() {
         final String padding = "  ";
         StringBuilder query = new StringBuilder();
-        query.append("CREATE TABLE person (\n")
-                .append("  ").append(COL_ID).append(" int(10) UNSIGNED NOT NULL AUTO_INCREMENT,\n")
-                .append("  ").append(COL_FIRST_NAME).append(" varchar(").append(COL_FIRST_NAME_SIZE).append(") DEFAULT NULL,\n")
-                .append("  ").append(COL_SURNAME).append(" varchar(").append(COL_SURNAME_SIZE).append(") DEFAULT NULL,\n")
-                .append("  ").append(COL_EMAIL).append(" varchar(").append(COL_EMAIL_SIZE).append(") DEFAULT NULL,\n")
-                .append("  ").append(COL_PHYS_ADDR).append(" varchar(").append(COL_PHYS_ADDR_SIZE).append(") DEFAULT NULL,\n")
+        query.append("CREATE TABLE ").append(TABLE_NAME).append(" (\n")
+                .append("  ").append(COL_ID).append(" INT(10) UNSIGNED NOT NULL AUTO_INCREMENT,\n")
+                .append("  ").append(COL_FIRST_NAME).append(" VARCHAR(").append(COL_FIRST_NAME_SIZE).append(") DEFAULT NULL,\n")
+                .append("  ").append(COL_SURNAME).append(" VARCHAR(").append(COL_SURNAME_SIZE).append(") DEFAULT NULL,\n")
+                .append("  ").append(COL_EMAIL).append(" VARCHAR(").append(COL_EMAIL_SIZE).append(") DEFAULT NULL,\n")
+                .append("  ").append(COL_PHYS_ADDR).append(" VARCHAR(").append(COL_PHYS_ADDR_SIZE).append(") DEFAULT NULL,\n")
                 .append("  ").append("PRIMARY KEY (").append(COL_ID).append(")\n")
                 .append(") COMMENT='Records of all actors in the PM process from customers to engineers'");
         return query.toString();
