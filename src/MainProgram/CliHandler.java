@@ -372,7 +372,7 @@ class CliHandler {
         String input = "";
         boolean shouldContinue = true;
         while (shouldContinue) {
-            System.out.println("Current project record: " +projectToChange.getOneLineString());
+            System.out.println("Current project record: \n" +projectToChange.getFullDescription());
             menuText.setLength(0);
             menuText.append(
                     """
