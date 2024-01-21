@@ -513,11 +513,10 @@ public class DataSource {
         for (int i = 0; i < keys.size(); ++i) {
             query.append(keys.get(i)).append(" = ? ");
             if (i <= keys.size() -2) {
-                query.append("AND ");
+                query.append(", ");
             }
         }
         query.append("WHERE ").append(ProjectTable.COL_NUMBER).append(" = ").append(projectToChange.number);
-        System.out.println(query);
         final Set<String> stringColumns = new HashSet<>();
         stringColumns.add(ProjectTable.COL_PROJECT_NAME);
         stringColumns.add(ProjectTable.COL_PHYS_ADDR);
