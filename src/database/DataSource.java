@@ -130,18 +130,6 @@ public class DataSource {
         checkAndInitialiseTables();
     }
 
-    //TODO: Remove
-    public void printCurrentDatabase() throws DatabaseException {
-        String query = "SELECT DATABASE();";
-        try (Statement statement = connection.createStatement()) {
-            ResultSet result = statement.executeQuery(query);
-            result.next();
-            System.out.println("Current Database: " + result.getString(1));
-        } catch (SQLException ex) {
-            throw new DatabaseException("Error while checking current database", ex);
-        }
-    }
-
     private void checkAndInitialiseTables() throws DatabaseException{
         //The order of the tables in this method is important.
         // The Projects table must be last because it depends on the others.
