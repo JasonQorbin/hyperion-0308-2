@@ -292,13 +292,14 @@ public class DataSource {
         StringBuilder whereClause = new StringBuilder();
         whereClause.append("WHERE (").append(ProjectTable.COL_DEADLINE).append(" IS NULL OR ")
                 .append(ProjectTable.COL_DEADLINE).append(" > CURDATE()) AND ").append(ProjectTable.COL_STATUS)
-                .append(" < 7;");
+                .append(" < ").append(ProjectStatus.FINAL.id());
         return getProjectsBySearch(whereClause.toString());
     }
 
     public List<Project>getOverdueProjects() throws DatabaseException{
         StringBuilder whereClause = new StringBuilder();
-        whereClause.append("WHERE ").append(ProjectTable.COL_DEADLINE).append(" < CURDATE()");
+        whereClause.append("WHERE ").append(ProjectTable.COL_DEADLINE).append(" < CURDATE() AND ")
+                .append(ProjectTable.COL_STATUS).append(" < ").append(ProjectStatus.FINAL.id());
         return getProjectsBySearch(whereClause.toString());
     }
 
