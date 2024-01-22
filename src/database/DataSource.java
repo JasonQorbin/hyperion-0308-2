@@ -7,6 +7,10 @@ import java.sql.*;
 import java.sql.Date;
 import java.util.*;
 
+/**
+ * This class is meant to be the single touch point to reach the database. It is therefore modelled using the \
+ * Singleton pattern so that only one database Connection object is ever created.
+ */
 public class DataSource {
     private DatabaseCredentials credentials;
     private Connection connection;
@@ -130,6 +134,14 @@ public class DataSource {
         checkAndInitialiseTables();
     }
 
+    /**
+     * Brings the database into a valid state during the first run. Checks if each of the required tables exists
+     * and creates them with their starting data.
+     *
+     * The tables are added in the correct order according to their dependency on one another.
+     *
+     * @throws DatabaseException If a database error occurs during the process.
+     */
     private void checkAndInitialiseTables() throws DatabaseException{
         //The order of the tables in this method is important.
         // The Projects table must be last because it depends on the others.
@@ -296,6 +308,12 @@ public class DataSource {
         return getProjectsBySearch(whereClause.toString());
     }
 
+    /**
+     * Return a list of the projects that are not finalised and whose deadline date is before the current date.
+     *
+     * @return List of overdue projects
+     * @throws DatabaseException If a database error occurs.
+     */
     public List<Project>getOverdueProjects() throws DatabaseException{
         StringBuilder whereClause = new StringBuilder();
         whereClause.append("WHERE ").append(ProjectTable.COL_DEADLINE).append(" < CURDATE() AND ")
@@ -311,6 +329,17 @@ public class DataSource {
         return getProjectsByString(searchTerm, ProjectTable.COL_PHYS_ADDR);
     }
 
+    /**
+     * Helper method for finding project by searching for a search string in a specified column. The search is
+     * hardened against SQL injection so this method may accept user input.
+     * <p>
+     * Used by {@code getProjectsByName} and {@code getProjectsByAddress} above.
+     *
+     * @param searchTerm The string to
+     * @param column The name of the column to search in
+     * @return A list of projects that match the search criteria.
+     * @throws DatabaseException If a database error occurs or the search column supplied is not in the Projects table.
+     */
     private List<Project> getProjectsByString (String searchTerm, String column) throws DatabaseException  {
         StringBuilder whereClause = new StringBuilder();
         ArrayList<Project> answer;

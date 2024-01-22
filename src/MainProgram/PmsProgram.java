@@ -6,6 +6,9 @@ import database.DatabaseException;
 
 import java.sql.SQLException;
 
+/**
+ * This class is the main entry point of the program.
+ */
 public class PmsProgram {
 
     /**
@@ -107,6 +110,12 @@ public class PmsProgram {
 
     }
 
+    /**
+     * Returns the new program state based on the user's input.
+     *
+     * @param menuSelection The users input from the main menu.
+     * @return What the program state should change to.
+     */
     private static ProgramState newStateFromMainMenu(int menuSelection){
         return switch(menuSelection) {
             case 1:
@@ -128,6 +137,12 @@ public class PmsProgram {
         };
     }
 
+    /**
+     * Asks the user to provide details for connecting to the database server.
+     *
+     * @param handler The CliHandler object to use for capturing user input.
+     * @return A DatabaseCredentials object with all the user input.
+     */
     public static DatabaseCredentials getCredentialsFromUser(CliHandler handler) {
         System.out.println("\nPlease enter the database details (Leave the prompt blank to accept the defaults):");
         System.out.println("==================================================================================\n");

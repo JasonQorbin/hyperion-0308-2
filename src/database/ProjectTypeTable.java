@@ -26,6 +26,11 @@ public class ProjectTypeTable {
         "Large Retail"
     };
 
+    /**
+     * Generates the SQL to create the ProjectType table.
+     *
+     * @return An SQL query to insert the table into the database.
+     */
     public static String getCreationQuery() {
         final String padding = "  ";
         StringBuilder query = new StringBuilder();
@@ -37,7 +42,11 @@ public class ProjectTypeTable {
         return query.toString();
     }
 
-
+    /**
+     * Generates a list of SQL queries to insert the required data into the ProjectType table.
+     *
+     * @return A List of Strings containing INSERT queries.
+     */
     public static List<String> getInitialDataQueries() {
         StringBuilder queryBase = new StringBuilder();
         queryBase.append("INSERT INTO ").append(TABLE_NAME).append(" (");

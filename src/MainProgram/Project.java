@@ -56,6 +56,11 @@ public class Project implements Pickable {
         return status == ProjectStatus.CONSTRUCTION && totalPaid.compareTo(ZERO) > 0;
     }
 
+    /**
+     * Checks if the current project is eligible to advance to the next stage and does to so if it is able.
+     *
+     * @throws DatabaseException If a database error occurs.
+     */
     public void advanceStage() throws DatabaseException {
         DataSource dataSource = DataSource.getInstance();
         switch (status){

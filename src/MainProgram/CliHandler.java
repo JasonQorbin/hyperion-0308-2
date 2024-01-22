@@ -13,6 +13,10 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.*;
 
+/**
+ * This class is where most interactions with the user should occur. It maintains a Scanner instance that can be used to
+ * capture user input. Because of this, it's {@code close()} method should be called when no longer in use.
+ */
 class CliHandler {
     Scanner consoleReader;
 
@@ -90,7 +94,7 @@ class CliHandler {
      * The method called by selecting 'Add to Project' from the menu. Collects the information from the
      * user and calls to the database as needed.
      *
-     * @return The project that should be the new currently selected book (may be a new or existing project)
+     * @return The project that should be the new currently selected project.
      * @throws DatabaseException If an error occurs when calling the database.
      */
     public Project addProject() throws DatabaseException{
@@ -101,6 +105,14 @@ class CliHandler {
         return newProject;
     }
 
+    /**
+     * Called when the user selects "Add new Project" from the main menu. Collects the bare minimum information required
+     * to create a project record. The resulting project will not yet have a project number because it has not been
+     * added into the database yet.
+     *
+     * @return The resulting project object.
+     * @throws DatabaseException If a database error occurs.
+     */
     private Project getBasicProjectInfoFromUser() throws DatabaseException {
         Person customer = findOrCreatePerson();
         ProjectType type = chooseProjectType();
@@ -114,6 +126,11 @@ class CliHandler {
         return new Project(projectName, type, customer);
     }
 
+    /**
+     * Asks the user to choose a project type from a list
+     *
+     * @return The selected type (Enum value).
+     */
     private ProjectType chooseProjectType() {
         System.out.println(
                 """
@@ -131,6 +148,14 @@ class CliHandler {
         return allTypes.get(choice);
     }
 
+    /**
+     * Attempts to search for a person record using the name from the user as a search term. If possible matches are
+     * found, allows the user to select one. If the user doesn't select a person or no matches are found, proceeds to
+     * create a new record.
+     *
+     * @return The selected/created person
+     * @throws DatabaseException If a database error occurs.
+     */
     private Person findOrCreatePerson() throws DatabaseException {
         String name = getStringFromUser("Name to search: ", PersonTable.COL_FIRST_NAME_SIZE,
                 "People's names are limited to ? characters.", false);
@@ -163,6 +188,13 @@ class CliHandler {
         return answer;
     }
 
+    /**
+     * Finds and displays all projects that are not overdue or finalised then allows the user to select one.
+     *
+     * @param currentSelection The currently selected project. Will be displayed to assist the user. Can be null.
+     * @return The selected project
+     * @throws DatabaseException If a database error occurs.
+     */
     public Project showCurrentProjects(Project currentSelection) throws DatabaseException{
         ArrayList<Pickable> currentProjects = new ArrayList<>(DataSource.getInstance().getCurrentProjects());
 
@@ -174,6 +206,13 @@ class CliHandler {
         }
     }
 
+    /**
+     * Finds and displays all overdue projects then allows the user to select one.
+     *
+     * @param currentSelection The currently selected project. Will be displayed to assist the user. Can be null.
+     * @return The selected project
+     * @throws DatabaseException If a database error occurs.
+     */
     public Project showOverdueProjects(Project currentSelection) throws DatabaseException{
         ArrayList<Pickable> overdueProjects = new ArrayList<>(DataSource.getInstance().getOverdueProjects());
 
@@ -185,6 +224,13 @@ class CliHandler {
         }
     }
 
+    /**
+     * Finds and displays all projects then allows the user to select one.
+     *
+     * @param currentSelection The currently selected project. Will be displayed to assist the user. Can be null.
+     * @return The selected project
+     * @throws DatabaseException If a database error occurs.
+     */
     public Project showAllProjects(Project currentSelection) throws DatabaseException{
         ArrayList<Pickable> allProjects = new ArrayList<>(DataSource.getInstance().getOverdueProjects());
 
@@ -214,8 +260,7 @@ class CliHandler {
             3. By person
             0. Back to Main menu
         """);
-        
-        //TODO: Repeating code block used to get and validate input. Put in method.
+
         System.out.println();
         final int input = getMenuChoice("Menu choice: ", 0, 3);
 
@@ -260,7 +305,7 @@ class CliHandler {
 
 
     /**
-     * Helper method for getting user input for a menu and validating it.
+     * Helper method for getting user input for a menu and validating that it is within the range of values from the menu.
      *
      * @param prompt The prompt displayed to the user asking for input.
      * @param minChoice The smallest acceptable integer input from the user.
@@ -294,12 +339,12 @@ class CliHandler {
     }
 
     /**
-     * Helper method to print out a list of {@link Project} objects and ask the user to select one.
-     *
+     * Helper method to print out a list of {@link Pickable} objects (i.e. Projects or People) and ask the user to select one.
+     * <p><br>
      * Called on search results received from a database search method.
      *
-     * @param searchResults A List of {@link Project} objects to select from.
-     * @return The selected {@link Project}.
+     * @param searchResults A List of {@link Pickable} objects to select from.
+     * @return The selected {@link Pickable}. Typical you should cast this to the relevant object type afterwards.
      */
     private Pickable printAndPickResult(List<Pickable> searchResults) {
         System.out.println(" -- Search results -- ");
@@ -368,6 +413,16 @@ class CliHandler {
         return selectedProject;
     }
 
+    /**
+     * Presents the user with a menu for editing the fields of a project (all the fields except the project status/stage).
+     * The menu is repeatedly shown to the user as they specify changes and the requested changes are buffered until the
+     * user indicates that they are done and wish to save their changes. Those changes are then submitted to the database
+     * in a single query. 
+     * 
+     * @param projectToChange The project being edited.
+     * @return A project object representing the new state. Set the selected project to this value.
+     * @throws DatabaseException If a database error occurs.
+     */
     private Project updateProjectDetailMenu(Project projectToChange) throws DatabaseException{
         StringBuilder menuText = new StringBuilder();
         HashMap<String, Object> changes = new HashMap<>();
@@ -552,6 +607,16 @@ class CliHandler {
         return projectToChange;
     }
 
+    /**
+     * Called from the main menu. Facilitates the process of editing an existing person's details.
+     * <p><br>
+     * Allows the user to search for the person to edit and then displays a sub-menu asking for the specific value to
+     * change and the new value.
+     * <p><br>
+     * There is no buffering of changes. Each change is executed on the database immediately.
+     * 
+     * @throws DatabaseException if a database error occurs
+     */
     public void editPeople() throws DatabaseException{
         final int maxLength = PersonTable.COL_FIRST_NAME_SIZE;
         String searchTerm = getStringFromUser("Enter a person's name to search for [blank to list all records]: ",
@@ -609,9 +674,19 @@ class CliHandler {
 
     }
 
+    /**
+     * Prints a menu showing all the possible elements of a person record that can be changed and returns the user's 
+     * selection.
+     * 
+     * @param selectedPerson The person that is going to be edited. To allow the menu to show the details of the record 
+     *                       above the menu, aiding the user with their selection
+     * @return An integer matching the number in the menu of the user's selection. 
+     */
     private int personEditMenu(Person selectedPerson) {
         int choice = -1;
-        System.out.println("Selected person:\n" + selectedPerson.toString());
+        if (selectedPerson != null) {
+            System.out.println("Selected person:\n" + selectedPerson.toString());
+        }
         System.out.println(""" 
                 What would you like to change in the selected item?
                 1. Update firstName
@@ -626,6 +701,17 @@ class CliHandler {
         return choice;
     }
 
+    /**
+     * Used when updating a string field in a Project record. Prints a prompt that shows the user what the previous value in 
+     * the field was.
+     * 
+     * @param promptPrefix The prompt to the user. Will be appended with a message containing the previous value.
+     * @param oldValue The previous value. Can be null or blank if there was no previous value. 
+     * @param maxLength The maximum length of input allowed
+     * @param lengthErrorMsg The error message to display if the user exceeds the {@code maxLength}. And '?' will be 
+     *                       replaced with the value of {@code maxLength}  
+     * @return The string input from the user.
+     */
     private String getNewStringValueForUpdateMenu(String promptPrefix, String oldValue, int maxLength, String lengthErrorMsg){
         StringBuilder prompt = new StringBuilder();
         prompt.append(promptPrefix);
@@ -636,6 +722,15 @@ class CliHandler {
         return getStringFromUser(prompt.toString(), maxLength, lengthErrorMsg, true);
     }
 
+    /**
+     * Used when updating an integer field in a Project record. Prints a prompt that shows the user what the previous value in 
+     * the field was.
+     *
+     * @param promptPrefix The prompt to the user. Will be appended with a message containing the previous value.
+     * @param oldValue The previous value. Can be zero if there was no previous value.
+     * @param zeroAllowed Whether or not zero is considered valid input.
+     * @return The integer input from the user.
+     */
     private int getNewIntValueForUpdateMenu(String promptPrefix, int oldValue, boolean zeroAllowed){
         StringBuilder prompt = new StringBuilder();
         prompt.append(promptPrefix);
@@ -666,6 +761,15 @@ class CliHandler {
         return answer;
     }
 
+    /**
+     * Used when updating a decimal field in a Project record. Prints a prompt that shows the user what the previous value in 
+     * the field was.
+     *
+     * @param promptPrefix The prompt to the user. Will be appended with a message containing the previous value.
+     * @param oldValue The previous value. Can be zero if there was no previous value.
+     * @param zeroAllowed Whether or not zero is considered valid input.
+     * @return The input from the user in a BigDecimal object.
+     */
     private BigDecimal getNewDecimalValueForUpdateMenu(String promptPrefix, BigDecimal oldValue, boolean zeroAllowed){
         final BigDecimal ZERO = new BigDecimal(0);
         StringBuilder prompt = new StringBuilder();
@@ -699,6 +803,15 @@ class CliHandler {
         return answer;
     }
 
+    /**
+     * A method for asking the user who to assign to a role. Displays the old assignee to the user in the prompt.
+     * Initiates a search dialog to allow the user to select a person or create a new one. 
+     * 
+     * @param oldPerson The previous assignee. Can be null if there was no previous assignee.
+     * @param role A String with the name of the role being assigned. Typical you can use the Project table column name. 
+     * @return The new person to assign
+     * @throws DatabaseException If a database error occurs.
+     */
     private Person getNewAssignee(Person oldPerson, String role) throws DatabaseException {
         if (oldPerson != null) {
             System.out.println("Current assigned " + role + " is: " + oldPerson.getOneLineString());
@@ -706,6 +819,13 @@ class CliHandler {
         return findOrCreatePerson();
     }
 
+    /**
+     * Asks the user to confirm that they want to delete the given project and then does so if the answer is yes.
+     * 
+     * @param projectToDelete The project to delete.
+     * @return {@code true} if the database is modified.
+     * @throws DatabaseException If a database error occurs.
+     */
     private boolean deleteProject(Project projectToDelete) throws DatabaseException{
 
         System.out.println("Selected project: " + projectToDelete.getOneLineString());
@@ -721,6 +841,12 @@ class CliHandler {
         return deleted;
     }
 
+    /**
+     * Helper function to ask the user a yes/no question and collect their response.
+     * 
+     * @param prompt The question the user is being asked.
+     * @return {@code true} if the user answers 'yes'. {@code false} otherwise.
+     */
     private boolean getYesNoFromUser(String prompt) {
         while (true) {
             System.out.print(prompt);
