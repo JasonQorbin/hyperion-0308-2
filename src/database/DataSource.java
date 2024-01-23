@@ -163,6 +163,7 @@ public class DataSource {
 
         if (!tableExists(ProjectTable.TABLE_NAME)){
             executeUpdate(ProjectTable.getCreationQuery());
+            executeBatchInsert(ProjectTable.getInitialDataQueries());
         }
     }
 

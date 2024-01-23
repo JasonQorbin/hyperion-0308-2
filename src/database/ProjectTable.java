@@ -88,7 +88,62 @@ public class ProjectTable {
     }
 
     public static List<String> getInitialDataQueries() {
-        //No initial data
-        return new ArrayList<String>();
+        ArrayList<String> answer = new ArrayList<>();
+        answer.add(new StringBuilder()
+                .append("INSERT INTO ").append(TABLE_NAME).append(" (")
+                .append(COL_PROJECT_NAME).append(", ")
+                .append(COL_CUSTOMER).append(", ")
+                .append(COL_TYPE).append(") VALUES ('New Office building for Std Bank', 2, 5);").toString());
+
+        answer.add(new StringBuilder()
+                .append("INSERT INTO ").append(TABLE_NAME).append(" (")
+                .append(COL_PROJECT_NAME).append(", ")
+                .append(COL_CUSTOMER).append(", ")
+                .append(COL_TYPE).append(", ")
+                .append(COL_PHYS_ADDR).append(", ")
+                .append(COL_ERF).append(", ")
+                .append(COL_DEADLINE).append(", ")
+                .append(COL_ARCHITECT).append(", ")
+                .append(COL_STATUS).append(", ")
+                .append(COL_ENGINEER).append(", ")
+                .append(COL_PROJ_MANAGER).append(", ")
+                .append(COL_TOTAL_FEE).append(") VALUES ('Corner shop in Athlone', 7, 3, 'Cnr Field Cres & Hickory Str, Athlone, Cape Town', 22230, '2024-07-31', 10, 6, 5, 8, 1600000.00);").toString());
+
+        answer.add(new StringBuilder()
+                .append("INSERT INTO ").append(TABLE_NAME).append(" (")
+                .append(COL_PROJECT_NAME).append(", ")
+                .append(COL_CUSTOMER).append(", ")
+                .append(COL_TYPE).append(", ")
+                .append(COL_PHYS_ADDR).append(", ")
+                .append(COL_ERF).append(", ")
+                .append(COL_DEADLINE).append(", ")
+                .append(COL_ARCHITECT).append(", ")
+                .append(COL_STATUS).append(") VALUES ('Boutique hotel in Parys', 2, 5, '7 Ring Rd, Parys, Free State', 107, '2024-12-01', 5, 3);").toString());
+
+        answer.add(new StringBuilder()
+                .append("INSERT INTO ").append(TABLE_NAME).append(" (")
+                .append(COL_PROJECT_NAME).append(", ")
+                .append(COL_CUSTOMER).append(", ")
+                .append(COL_TYPE).append(", ")
+                .append(COL_PHYS_ADDR).append(", ")
+                .append(COL_ERF).append(", ")
+                .append(COL_DEADLINE).append(", ")
+                .append(COL_ARCHITECT).append(", ")
+                .append(COL_STATUS).append(", ")
+                .append(COL_ENGINEER).append(", ")
+                .append(COL_PROJ_MANAGER).append(") VALUES ('Luxury apartments in Sandton', 2, 2, '12 Sandton Drive, Sandton', 7800, '2024-09-30', 2, 5, 8, 6);").toString());
+
+        answer.add(new StringBuilder()
+                .append("INSERT INTO ").append(TABLE_NAME).append(" (")
+                .append(COL_PROJECT_NAME).append(", ")
+                .append(COL_CUSTOMER).append(", ")
+                .append(COL_TYPE).append(", ")
+                .append(COL_PHYS_ADDR).append(", ")
+                .append(COL_ERF).append(", ")
+                .append(COL_DEADLINE).append(", ")
+                .append(COL_ARCHITECT).append(", ")
+                .append(COL_STATUS).append(", ")
+                .append(COL_ENGINEER).append(") VALUES ('Truck Depot', 9, 4, '67 Janadel Ave, Midrand', 45556, '2025-05-31', 4, 4, 4);").toString());
+        return answer;
     }
 }
