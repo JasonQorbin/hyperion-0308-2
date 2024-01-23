@@ -617,7 +617,7 @@ class CliHandler {
      * 
      * @throws DatabaseException if a database error occurs
      */
-    public void editPeople() throws DatabaseException{
+    public void editPeople() throws DatabaseException {
         final int maxLength = PersonTable.COL_FIRST_NAME_SIZE;
         String searchTerm = getStringFromUser("Enter a person's name to search for [blank to list all records]: ",
                 maxLength, "Names are limited to " + maxLength + "characters.", true);
@@ -669,7 +669,18 @@ class CliHandler {
                         personToEdit.address = input;
                     }
                     break;
+                case 5:
+                    System.out.println("Deleting this person will remove them from all the projects they are associated with.");
+                    if (getYesNoFromUser("Are you sure you ant to delete the selected person? [y/n] ")) {
+                        if (DataSource.getInstance().deletePerson(personToEdit)) {
+                            return;
+                        } else {
+                            continue;
+                        }
+                    }
+                    break;
             }
+
         }
 
     }
@@ -693,10 +704,11 @@ class CliHandler {
                 2. Update surname
                 3. Update e-mail
                 4. Update address
+                5. Delete person
                 0. Return to Main Menu
                 """);
 
-        choice = getMenuChoice("Make a selection [0 to cancel]: ", 0, 4);
+        choice = getMenuChoice("Make a selection [0 to cancel]: ", 0, 5);
         System.out.println();
         return choice;
     }

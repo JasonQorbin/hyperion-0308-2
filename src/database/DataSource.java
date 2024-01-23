@@ -798,6 +798,26 @@ public class DataSource {
     }
 
     /**
+     * Deletes the records associated with the given Person object from the database.
+     *
+     * @param toDelete The Person to be delete
+     * @return {@code true} if the database is modified.
+     * @throws DatabaseException If a database error occurs.
+     */
+    public boolean deletePerson(Person toDelete) throws DatabaseException{
+        String query = new StringBuilder()
+                .append("DELETE FROM ").append(PersonTable.TABLE_NAME).append(" WHERE ").append(PersonTable.COL_ID)
+                .append(" = ").append(toDelete.id).append(';').toString();
+        int updateCount = 0;
+        try (Statement statement = connection.createStatement()) {
+            updateCount = statement.executeUpdate(query);
+        } catch (SQLException ex) {
+            throw new DatabaseException("Error ocurred while deleting person.", ex);
+        }
+        return updateCount == 1;
+    }
+
+    /**
      * <p>
      * Helper method for escaping the wildcard characters used in the SQL LIKE clause from a string. Because the
      * search method uses Prepared Statements to avoid injection attacks, it would normally escape the wildcard
@@ -817,7 +837,6 @@ public class DataSource {
      * @param input The String to be sanitised
      * @return The (partially) sanitised string.
      */
-
     private static String likeSanitize(String input) {
         return input
                 .replace("!", "!!")

@@ -130,7 +130,8 @@ public class Project implements Pickable {
     @Override
     public String toString() {
         StringBuilder builder = new StringBuilder();
-        builder.append(name).append(" | Customer: ").append(customer.fullName()).append(" | Project size: ").append(totalFee);
+        builder.append(name).append(" | Customer: ").append(customer == null? "No customer assigned" : customer.fullName())
+                .append(" | Project size: ").append(totalFee);
         return builder.toString();
     }
 
