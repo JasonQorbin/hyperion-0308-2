@@ -289,6 +289,9 @@ class CliHandler {
                 break;
             case 3:
                 final Person personToSearch = findOrCreatePerson();
+                if (personToSearch == null) {
+                    return null;
+                }
                 searchResults = new ArrayList<>(DataSource.getInstance().getProjectsByPerson(personToSearch));
                 break;
             default:
@@ -630,6 +633,9 @@ class CliHandler {
             results = new ArrayList<>(dataSource.searchPeople(searchTerm));
         }
         personToEdit = (Person) printAndPickResult(results);
+        if (personToEdit == null){
+            return;
+        }
 
         int choice = -1;
         while (choice != 0) {
