@@ -630,6 +630,9 @@ class CliHandler {
             results = new ArrayList<>(dataSource.searchPeople(searchTerm));
         }
         personToEdit = (Person) printAndPickResult(results);
+        if (personToEdit == null){
+            return;
+        }
 
         int choice = -1;
         while (choice != 0) {
