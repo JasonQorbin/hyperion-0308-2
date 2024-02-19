@@ -730,6 +730,17 @@ public class DataSource {
             answer.addAll(getListOfPersonsFromResultSet(firstNameFuzzyResult));
             answer.addAll(getListOfPersonsFromResultSet(surnameFuzzyResult));
 
+            //Searching by first name and surname can produce duplicate results.
+            //Remove the duplicates before returning.
+            for (int i = 0; i < answer.size() - 1; ++i) {
+                for (int j = i + 1; j < answer.size(); ++j) {
+                    if (answer.get(i).id == answer.get(j).id) {
+                        answer.remove(j);
+                        --j;
+                    }
+                }
+            }
+
         } catch (SQLException ex) {
             throw new DatabaseException("Database error while searching people records.", ex);
         }
