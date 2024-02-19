@@ -221,11 +221,11 @@ public class DataSource {
      * parameter. Use this when handling a search term received from the user.
      *
      * @param whereClause The WHERE clause to use (should not end with a ';')
-     * @param stringParameter A string parameter that may be unsafe in terms of SQL injection.
+     * @param stringParameters An array of string parameters that may be unsafe in terms of SQL injection.
      * @return A list of result (Project objects)
      * @throws DatabaseException If a database error occurs.
      */
-    private List<Project> getProjectsByStringSearch(String whereClause, String stringParameter) throws DatabaseException{
+    private List<Project> getProjectsByStringSearch(String whereClause, String[] stringParameters) throws DatabaseException{
         ArrayList<Project> answer = new ArrayList<>();
         StringBuilder query = new StringBuilder();
         query.append("SELECT * FROM ").append(ProjectTable.TABLE_NAME);
@@ -233,7 +233,9 @@ public class DataSource {
             query.append(' ').append(whereClause);
         }
         try (PreparedStatement statement = connection.prepareStatement(query.toString())) {
-            statement.setString(1, stringParameter);
+            for (int i = 0; i < stringParameters.length; ++i) {
+                statement.setString(i + 1, stringParameters[i]);
+            }
             ResultSet results = statement.executeQuery();
             answer.addAll(getListOfProjectsFromResultSet(results));
         } catch (SQLException ex) {
@@ -346,12 +348,13 @@ public class DataSource {
         ArrayList<Project> answer;
         //Do exact search first so that we show it at the top of the search results if the user typed a specific searchTerm
         whereClause.append("WHERE ").append(column).append(" = ?");
-        answer = new ArrayList<>(getProjectsByStringSearch(whereClause.toString(), searchTerm));
+        answer = new ArrayList<>(getProjectsByStringSearch(whereClause.toString(), new String[] {searchTerm}));
 
         //Then do a fuzzy search for a word in the middle of the database value
         whereClause.setLength(0);
         whereClause.append("WHERE ").append(column).append(" LIKE ? ESCAPE '!' ");
-        answer.addAll(getProjectsByStringSearch(whereClause.toString(), "%" + likeSanitize(searchTerm) + "%"));
+        whereClause.append("AND ").append(column).append(" != ?");
+        answer.addAll(getProjectsByStringSearch(whereClause.toString(), new String[] {"%" + likeSanitize(searchTerm) + "%", searchTerm}));
         return answer;
     }
 
