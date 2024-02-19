@@ -289,6 +289,9 @@ class CliHandler {
                 break;
             case 3:
                 final Person personToSearch = findOrCreatePerson();
+                if (personToSearch == null) {
+                    return null;
+                }
                 searchResults = new ArrayList<>(DataSource.getInstance().getProjectsByPerson(personToSearch));
                 break;
             default:
